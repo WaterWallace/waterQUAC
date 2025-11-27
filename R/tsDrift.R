@@ -52,7 +52,7 @@
 
 detect_sensor_drift <- function(data, value_col, threshold_multiplier = 2, time_threshold_days = 5, overwrite = NULL) {
   # Find the column name that is of class "posixct"
-  time_col <- names(df)[sapply(df, function(x) any(class(x) == "POSIXct"))]
+  time_col <- names(data)[sapply(data, function(x) any(class(x) == "POSIXct"))]
 
   # Ensure the data is sorted by time
   data <- data[order(data[[time_col]]), ]

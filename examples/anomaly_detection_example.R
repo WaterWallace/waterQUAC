@@ -69,8 +69,8 @@ head(result)
 
 plotly::plot_ly(result) |>
   plotly::add_markers(
-    x =  ~ts,
-    y =  ~Value,
+    x = ~ts,
+    y = ~Value,
     type = "scatter",
     color = ~Quality,
     colors = quality_colors
@@ -92,4 +92,10 @@ plotly::plot_ly(result) |>
     y = ~median - 4 * sd,
     line = list(color = 'red', dash = "dash", width = 1),
     name = "-4 SD"
+  ) |>
+  plotly::layout(
+    title = "Water Quality Sensor; Auto-QC Example",
+    xaxis = list(title = "Timestamp"),
+    yaxis = list(title = "Total Suspended Solids (mg/L)")
   )
+

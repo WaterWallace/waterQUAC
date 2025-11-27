@@ -100,12 +100,13 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
       !!sym(q_name) := case_when(
         !is.na(.data[[q_name]]) & !(.data[[q_name]] %in% overwrite) ~ as.character(.data[[q_name]]),
         df[[2]] < 0 ~ 'impossible',
+        abs(suppressWarnings(df[[2]] - sp$median)) > (4 * sp$sd) ~ 'spike',
         df[[2]] < sensorMin ~ 'below_limits',
         df[[2]] > sensorMax ~ 'above_limits',
         sp$centerSD < prec ~ 'repeating_value',
         sp$leftSD < prec ~ 'repeating_value',
         sp$rightSD < prec ~ 'repeating_value',
-        abs(suppressWarnings(df[[2]] - sp$median)) > (4 * sp$sd) ~ 'spike',
+
         TRUE ~ 'OK'
       )
     )
