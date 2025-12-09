@@ -1,7 +1,7 @@
 Package: waterQUAC
 Type: Package
 Title: waterQUAC: Water Data Quality Control
-Version: 0.1.0
+Version: 0.2.0
 Author: Cameron Roberts
 Maintainer: <cameron.roberts@des.qld.gov.au>
 Description: A collection of functions to facilitate data extraction from a variety of water quality 
@@ -9,7 +9,7 @@ Description: A collection of functions to facilitate data extraction from a vari
 License: Apache License (>= 2)
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Depends: R (>= 2.10)
 Imports: 
     magrittr,
