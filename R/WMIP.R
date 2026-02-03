@@ -108,5 +108,3 @@ wmip_hist <- function (site_id, var = "level", datasource = "AT", start_time,
   }
   return(df)
 }
-
-

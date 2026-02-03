@@ -9,7 +9,8 @@ detect_sensor_drift(
   value_col,
   threshold_multiplier = 2,
   time_threshold_days = 5,
-  overwrite = NULL
+  overwrite = NULL,
+  type = NULL
 )
 }
 \arguments{
@@ -49,6 +50,7 @@ The input data frame (`data`) must include:
 All other columns in the input data frame will be preserved in the output.
 }
 \examples{
+library(dplyr)
 # Simulated data
 set.seed(42)
 ts <- seq.POSIXt(from = as.POSIXct("2024-01-01"), by = "hour", length.out = 200)

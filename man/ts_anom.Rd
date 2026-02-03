@@ -11,7 +11,8 @@ ts_anom(
   sensorMax,
   window = 10,
   prec = 1e-04,
-  diag = FALSE
+  diag = FALSE,
+  output = 0
 )
 }
 \arguments{

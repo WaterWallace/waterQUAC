@@ -59,8 +59,9 @@
 #'     )
 #'
 #' @export
+#'
+ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0001, diag = FALSE, output=0) {
 
-ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0001, diag = FALSE) {
 
   # Define the pattern to match variations of "quality"
   pattern <- "(?i)quality"
@@ -77,6 +78,8 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
 
   sp <- tibble::tibble(ts = df[[posixct_column]])
 
+  #df[[posixct_column]])
+  #sp15 <- changeInterval(sp %>% as.data.frame, Interval = 15)
 
   # Calculate the time differences between consecutive timestamps
   time_diff <- diff(sp[["ts"]])
@@ -84,15 +87,19 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
   # Calculate the average data logging interval per day and reduce it to match the defined window. interval = points per window
   interval <- round(((1440 / as.numeric(mean(time_diff), units = "mins")) / 24) * window)
 
+
+  #median(time_diff)
+
+
   #Flatline detection
   sp$centerSD <- zoo::rollapply(df[,2], width = interval, FUN = sd, fill = TRUE, align = 'center', na.rm = TRUE)   # a rolling window of Standard Deviation in parameter values - CENTERED -- rep_width determines the window width for all of these options
   sp$leftSD <-   zoo::rollapply(df[,2], width = interval, FUN = sd, fill = TRUE, align = 'left', na.rm = TRUE)     # a rolling window of Standard Deviation in parameter values - LEFT -- rep_width determines the window width for all of these options
   sp$rightSD <-  zoo::rollapply(df[,2], width = interval, FUN = sd, fill = TRUE, align = 'right', na.rm = TRUE)    # a rolling window of Standard Deviation in parameter values - RIGHT -- rep_width determines the window width for all of these options
 
+
   #Spike detection
   sp$median <- zoo::rollapply(suppressWarnings(df[,2]), width = interval, FUN = median,  partial = TRUE, na.rm = TRUE, align = 'center')   # rolling median of the log(value) for given width - med_width - centered
   sp$sd <-     zoo::rollapply(suppressWarnings(df[,2]), width = interval, FUN = sd, na.rm=TRUE, partial = TRUE, align = 'center')            # rolling standard deviation of the median log(value) as calculated above for a larger window - centered
-
 
   # Use `!!sym(q_name)` for dynamic column reference
   df <- df %>%
@@ -110,6 +117,8 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
       )
     )
 
+  #unique(df$Quality)
+
   # Optionally include sp columns in output
   if (diag) {
     df <- bind_cols(df, sp[, -1])  # drop 'ts' column from sp to avoid duplication
@@ -117,4 +126,3 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
 
   return(df)
 }
-

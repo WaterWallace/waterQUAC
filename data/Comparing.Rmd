@@ -1,0 +1,450 @@
+---
+title: "Untitled"
+author: "Stephen Wallace"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(ggplot2)
+library(patchwork)
+library(ccInterp) # for despike
+library(waterQUAC)
+library(data.table) #for rleid
+# load libraries
+library(tidyverse)
+library(waterQUAC)
+library(readr)
+library(plotly)
+library(irr)
+
+# functions:
+# Function to read a rater CSV and standardize names
+read_rater <- function(path, rater_name) {
+  readr::read_csv(path, show_col_types = FALSE) %>%
+    slice(-(1:2)) %>%
+    set_names(c("timestamp", "value", "quality")) %>%
+    mutate(
+      timestamp = as.POSIXct(timestamp, tz = "UTC"),
+      value = suppressWarnings(as.numeric(value)), # coerce to numeric (NA if not numeric)
+      quality = if_else(is.na(quality), "1010", quality)
+    ) %>%
+    rename(!!paste0("value_", rater_name) := value,
+           !!paste0("quality_", rater_name) := quality)
+}
+
+
+
+detect_sensor_drift_old <- function(data, value_col, threshold_multiplier = 2, time_threshold_days = 5, overwrite = NULL) {
+  # Find the column name that is of class "posixct"
+  time_col <- names(data)[sapply(data, function(x) any(class(x) == "POSIXct"))]
+
+  # Ensure the data is sorted by time
+  data <- data[order(data[[time_col]]), ]
+
+
+
+  # Calculate the threshold based on the multiplier
+  threshold <- threshold_multiplier * median(data[[value_col]], na.rm = TRUE)
+
+  # Calculate time difference in seconds
+  data$time_diff <- c(NA, diff(as.numeric(as.POSIXct(data[[time_col]]))))
+
+  # Compute cumulative time above threshold (in days)
+  cumulative_time <- 0
+  cumulative_times <- numeric(nrow(data))
+
+  for (i in seq_len(nrow(data))) {
+    if (!is.na(data[[value_col]][i]) && data[[value_col]][i] > threshold) {
+      cumulative_time <- cumulative_time + ifelse(!is.na(data$time_diff[i]), data$time_diff[i], 0)
+    } else {
+      cumulative_time <- 0
+    }
+    cumulative_times[i] <- cumulative_time / 86400  # convert to days
+  }
+
+  # Store cumulative time in the data
+  data$cumulative_time_above_threshold <- cumulative_times
+
+  # Detect or create quality column
+  pattern <- "(?i)quality"
+  if (!any(grepl(pattern, colnames(data)))) {
+    data$quality <- NA
+    quality_col <- "quality"
+  } else {
+    quality_col <- colnames(data)[grep(pattern, colnames(data))[1]]  # first match
+  }
+
+  # Flag sensor drift conditionally, using overwrite logic
+  should_flag <- data$cumulative_time_above_threshold > time_threshold_days
+  can_overwrite <- is.na(data[[quality_col]]) |
+    (!is.null(overwrite) & data[[quality_col]] %in% overwrite)
+
+  data[[quality_col]][should_flag & can_overwrite] <- "sensor_drift"
+
+  return(data)
+}
+
+```
+
+## Spikes
+
+I optimised the code for R (got rid of slow loops).
+So the code runs much faster.
+
+Also, for whatever reason, drift detection wasn't in the original ts_anom, so I included it in ts_anom2.
+
+
+```{r, fig.height=8, fig.width=7}
+
+
+df <- waterQUAC::TSS_data
+
+
+ts_anom_plot <- function(data, title)
+{
+  data %>%
+  ggplot(aes(x = .[[1]], y = .[[2]], colour = .[[3]], shape = .[[3]])) +
+  geom_point(size = 2) +  # Adjust the size of the points as needed
+  scale_colour_manual(
+    values = c(
+      "spike" = "yellow3",
+      "OK" = "darkgreen",
+      "impossible" = "lightcoral",  # Light red
+      "sensor_drift" = "purple",
+      "repeating_value" = "saddlebrown",  # Dark brown
+      "above_limits" = "yellow3"
+    )
+  ) +
+  scale_shape_manual(
+    values = c(
+      "spike" = 4,  # Cross
+      "OK" = 16,    # Filled circle
+      "impossible" = 16,  # Filled circle
+      "sensor_drift" = 16,  # Filled circle
+      "repeating_value" = 15,  # Square
+      "above_limits" = 15
+    )
+  ) +
+  theme_dark() +  # Apply a dark theme
+  labs(
+    title = title,
+    x = "Timestamp",
+    y = "Value",
+    colour = "Quality",
+    shape = "Quality"
+  )
+}
+
+df <- waterQUAC::TSS_data
+
+start <- Sys.time()
+# Apply anomaly detection
+flagged <- ts_anom(df = df,
+                   window = 6,
+                              overwrite = 1:4000,
+                              sensorMin = 0,
+                              sensorMax = 2000)
+Sys.time() - start
+
+unique(flagged$Quality)
+flagged[flagged$Quality == "spike",] %>% nrow
+
+start <- Sys.time()
+# Apply anomaly detection
+flagged2 <- ts_anom2(df = df,
+                     window = 5,
+                     overwrite = 1:4000,
+                     sensorMin = 0,
+                     sensorMax = 2000)
+
+Sys.time() - start
+flagged2[flagged2$Quality == "spike",] %>% nrow
+
+
+flagged %>% ts_anom_plot(title = "tsAnom Original")
+flagged2 %>% ts_anom_plot(title = "tsAnom SKW")
+
+start <- Sys.time()
+# automation
+auto2 <- read_rater("C:/Users/wallacesw/Documents/GitHub/WQI/04_quality-assurance/sensor_anom/qaqc_triple_blind/data/cam.csv", "auto2")
+auto2 <- ts_anom2(df = auto2,
+                     window = 10,
+                     overwrite = 1:4000,
+                     sensorMin = 0,
+                     sensorMax = 2000)
+auto2 %>% ts_anom_plot(title = "tsAnom SKW")
+unique(auto2$quality_auto2)
+auto2$timestamp %>% diff %>% median
+
+auto2drift <- auto2 %>% dplyr::filter(quality_auto2 == "sensor_drift")
+
+
+auto <- read_rater("C:/Users/wallacesw/Documents/GitHub/WQI/04_quality-assurance/sensor_anom/qaqc_triple_blind/data/cam.csv", "auto")
+auto <- ts_anom(df = auto,
+                     window = 10,
+                     overwrite = 1:4000,
+                     sensorMin = 0,
+                     sensorMax = 2000)
+auto %>% ts_anom_plot(title = "tsAnom")
+#unique(auto$quality_auto2)
+
+
+swallace <- read_rater("C:/Users/wallacesw/Documents/GitHub/WQI/04_quality-assurance/sensor_anom/qaqc_triple_blind/data/swallace.csv", "swallace")
+swallace <- swallace %>%
+  mutate(
+    quality_swallace = case_when(
+      quality_swallace == "3000" ~ "3002",
+      quality_swallace == "3202" ~ "3002",
+      quality_swallace == "3203" ~ "3003", 
+      quality_swallace == "3205" ~ "3005",
+      TRUE ~ quality_swallace  # keep all other codes as they are
+    )
+  ) %>%
+  mutate(
+    quality_swallace = case_when(
+      quality_swallace == "3002" ~ "spike",
+      quality_swallace == "3003" ~ "sensor_drift", 
+      quality_swallace == "3005" ~ "sensor_drift",
+      TRUE ~ "OK" 
+  ))
+
+
+swallace %>% ts_anom_plot(title = "SWALLACE") / auto2 %>% ts_anom_plot(title = "tsAnom SKW")
+swallace %>% ts_anom_plot(title = "SWALLACE") / auto %>% ts_anom_plot(title = "tsAnom")
+swallace %>% ts_anom_plot(title = "Manual by SWALLACE") / auto2 %>% ts_anom_plot(title = "Auto SKW") /  auto %>% ts_anom_plot(title = "Auto OLD")
+
+
+swallace$quality_swallace %>% unique
+
+
+```
+
+## Random despiking
+
+Spiked values are the blue crosses
+
+Red dots are removed values
+
+```{r spikeplots, echo = TRUE}
+
+
+```
+
+## Time difference
+
+
+```{r tdiff, echo = TRUE}
+
+# Calculate the time differences between consecutive timestamps
+time_diff <- diff(df$ts)
+
+mean(time_diff)
+median(time_diff)
+
+# Calculate the average data logging interval per day and reduce it to match the defined window. interval = points per window
+window <- 10
+round(((1440 / as.numeric(mean(time_diff), units = "mins")) / 24) * window)
+
+
+```
+
+Original spike detection (tsAnom) was based on "average time difference", and therefore
+a window of a number of points, rather than a set time interval.
+
+A window of "10" in this example, was worked out to averaging 30 points for duplicate/spike detection.
+
+The mean difference between times is 20. If the timeseries was exactly every 20 minutes, then 30 points would be across 10 hours.
+However the median is 15 minutes, so 30 points is actually across 7.5 hours.
+
+If there were gaps in the data, it might include very long timespans to determine spikes.
+
+
+```{r flowcell}
+
+# Full sites with flow cell
+mean_time_diff <- 60
+round(((1440 / as.numeric(mean_time_diff, units = "mins")) / 24) * window)
+
+```
+
+
+It would end up treating "full sites" very differently to "microsites", where the flowcells only read every hour, but the 
+in-situ read every 15 minutes.
+
+So a site with a flow cell would only consider 10 points, compared to 30 points at a microsite.
+
+## Data skewed
+
+The data gets skewed (in time), and biased, when not considered as timeseries.
+
+```{r anom2}
+
+numericdf <- df %>% mutate(minutes = as.numeric(ts)/60) %>% mutate(minutes = minutes - minutes[1])
+plot(Value ~ minutes, numericdf)
+diff(range(numericdf$minutes))
+
+times <- seq(from = 0, by = mean(time_diff), length.out = nrow(numericdf))
+
+plot(times, numericdf$Value)
+
+
+```
+## My Spike Detection
+
+Mine is designed to follow the data itself, not so much outlier detection like Cam's.
+
+Cam's works well despite the time bias.
+
+
+```{r anom3}
+
+data(xy_data)
+D <- within(xy_data, {
+  x <- as.POSIXct(x * 60 * 60 * 24, origin = "1970-01-01")
+})
+
+# add some spikes
+D[round(nrow(D)/2),2] <- 60
+D[round(nrow(D)/4),2] <- 80
+#D <- rbind(D, data.frame(x=as.POSIXct("2016-12-18 23:00"), y = 80))
+#D[150,2] <- 40
+D <- D %>% arrange(x)
+
+View(D)
+#plot(D$y)
+
+plot(D, col="red", pch=16)
+xts(D$y,D$x) %>% dygraph
+
+# despike
+despikedD <- cciDespike(D, doPlot = TRUE)
+points(despikedD, col="black", pch=16)
+
+
+```
+
+
+## Drift Detection
+
+Drift detection works well, as it considers the data as a timeseries, with different time gaps between points.
+
+```{r anom3}
+
+skwspikes <- flagged2 %>% dplyr::filter(Quality == "spike")
+
+skwnospikes <- flagged2 %>% dplyr::filter(Quality != "spike")
+
+
+
+cbind(
+xts(df$Value, df$ts),
+xts(camspikes$Value, camspikes$ts),
+xts(skwspikes5$Value, skwspikes5$ts)) %>% dygraph
+
+
+
+cbind(
+xts(skwspikes$Value, skwspikes$ts),
+xts(skwnospikes$Value, skwnospikes$ts)) %>% dygraph
+
+camspikes <- flagged %>% dplyr::filter(Quality == "spike")
+camnospikes <- flagged %>% dplyr::filter(Quality != "spike")
+
+cbind(
+xts(camspikes$Value, camspikes$ts),
+xts(camnospikes$Value, camnospikes$ts)) %>% dygraph
+
+cbind(
+xts(df$Value, df$ts),
+xts(camspikes$Value, camspikes$ts),
+xts(skwspikes$Value, skwspikes$ts)
+) %>% dygraph
+
+View(df)
+df$Quality <- 1
+
+### Normal
+start <- Sys.time()
+drift <- df %>% detect_sensor_drift_old(value_col = 'Value', time_threshold_days = 5, overwrite = 1:4000)
+Sys.time() - start
+start <- Sys.time()
+drift2 <- df %>% detect_sensor_drift(value_col = 'Value',time_threshold_days = 5, overwrite = 1:4000, type = NULL)
+Sys.time() - start
+
+drift %>% mutate(Quality = ifelse(Quality == "sensor_drift", "sensor_drift","OK")) %>% ts_anom_plot("drift detection Original") /
+  drift2 %>% mutate(Quality = ifelse(Quality == "sensor_drift", "sensor_drift","OK"))%>% ts_anom_plot("drift detection SKW")
+
+drift %>% dplyr::filter(ts > "2021-06-21" & ts < "2021-09-08") %>% mutate(Quality = ifelse(Quality == "sensor_drift", "sensor_drift","OK")) %>% ts_anom_plot("drift detection Original") /
+  drift2 %>% dplyr::filter(ts > "2021-06-21" & ts < "2021-09-08") %>% mutate(Quality = ifelse(Quality == "sensor_drift", "sensor_drift","OK"))%>% ts_anom_plot("drift detection SKW")
+
+drift %>% dplyr::filter(ts > "2021-06-21" & ts < "2021-09-08") %>% View
+
+```
+
+
+However long gaps that are followed by a value above the threshold, would instantly flag as drift, even on a single value.
+
+I reset long gaps (>5 days) to 1 day. As it would normally be expected that at the beginning of a flow event, turbidity values would be
+abnormally high, so you don't want to automatically call them sensor drift, as was the case previously.
+
+Determining drift should not include any impact of something that might have happened at the site over a week ago. 
+Let alone months ago for drier sites.
+
+
+```{r anom4}
+
+
+
+### Much lower time_threshold_days, rising only on second one
+start <- Sys.time()
+drift <- df %>% detect_sensor_drift_old(value_col = 'Value', time_threshold_days = 2, overwrite = 1:4000)
+Sys.time() - start
+start <- Sys.time()
+drift2 <- df %>% detect_sensor_drift(value_col = 'Value',time_threshold_days = 2, overwrite = 1:4000, type = "rising")
+Sys.time() - start
+
+drift %>% mutate(Quality = ifelse(Quality == "sensor_drift", "sensor_drift","OK")) %>% ts_anom_plot("drift detection Original erroneous drift, 2 day threshold") /
+  drift2 %>% mutate(Quality = ifelse(Quality == "sensor_drift", "sensor_drift","OK"))%>% ts_anom_plot("drift detection, rising only, 2 day threshold")
+
+drift %>% dplyr::filter(ts > "2021-06-21" & ts < "2021-09-08") %>% mutate(Quality = ifelse(Quality == "sensor_drift", "sensor_drift","OK")) %>% ts_anom_plot("drift detection Original erroneous drift, 2 day threshold") /
+  drift2 %>% dplyr::filter(ts > "2021-06-21" & ts < "2021-09-08") %>% mutate(Quality = ifelse(Quality == "sensor_drift", "sensor_drift","OK"))%>% ts_anom_plot("drift detection, rising only, 2 day threshold")
+
+```
+
+Reducing the time threshold to 2 days (instead of 5 - default), would understandably erroneously flag periods where it was above
+the median for the shorter timeframe (i.e. as expected during flow events).
+
+However, I adjusted it to only accumulate the time when the height was rising.
+
+The main difference between drift, at least in this example, is it's a slow but constant rise.
+
+
+```{r anom5}
+
+
+start <- Sys.time()
+driftNormal <- df %>% detect_sensor_drift(value_col = 'Value',time_threshold_days = 5, overwrite = 1:4000, type = NULL)
+Sys.time() - start
+
+start <- Sys.time()
+driftRising <- df %>% detect_sensor_drift(value_col = 'Value',time_threshold_days = 2, overwrite = 1:4000, type = "rising")
+Sys.time() - start
+
+driftNormal %>% mutate(Quality = ifelse(Quality == "sensor_drift", "sensor_drift","OK")) %>% ts_anom_plot("Normal, 5 day threshold") /
+  driftRising %>% mutate(Quality = ifelse(Quality == "sensor_drift", "sensor_drift","OK"))%>% ts_anom_plot("Rising Only, 2 day threshold")
+
+
+driftRising %>% dplyr::filter(ts > "2022-07-03" & ts < "2022-07-13") %>% mutate(Quality = ifelse(Quality == "sensor_drift", "sensor_drift","OK"))%>% ts_anom_plot("Rising Only, 2 day threshold")
+
+
+```
+
+Flow events fall for about as long as they rise for.  So the window can be halved, to include more drift, and less flow events.
+
+Here, despite decreasing the window to 2 days from 5 days, it doesn't necessarily introduce much erroneous flagging of drift.
+
+But it does become more sensitive to periods where there may actually be drift, which was previously missed on the longer window.
+

@@ -1,7 +1,7 @@
 Package: waterQUAC
 Type: Package
 Title: waterQUAC: Water Data Quality Control
-Version: 0.2.0
+Version: 0.2.3
 Author: Cameron Roberts
 Maintainer: <cameron.roberts@des.qld.gov.au>
 Description: A collection of functions to facilitate data extraction from a variety of water quality 
