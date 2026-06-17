@@ -60,9 +60,11 @@
 #'
 #'
 #' @export
+
 ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 10, prec = 0.0001, diag = FALSE, lonelyPoints = 4, time_threshold_days = 2, flashy = FALSE, invert = FALSE, log = FALSE, medianfilt = TRUE) {
 
   impossible_removed <- df %>% dplyr::filter(.[[2]] <= 0)
+
   below_limits_removed <- df %>% dplyr::filter(.[[2]] < sensorMin)
   above_limits_removed <- df %>% dplyr::filter(.[[2]] > sensorMax)
 
@@ -80,12 +82,13 @@ ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 1
   posixct_column <- names(df)[sapply(df, function(x) any(class(x) == "POSIXct"))]
   sp <- tibble::tibble(ts = df[[posixct_column]], value = df[[2]])
 
+  duplicates_removed <- removeTSDuplicates(sp, sp$value, output = 1)
+
   ######################################
   ## Clean data before despiking
 
-  duplicates_removed <- removeTSDuplicates(sp, sp$value, output = 1)
-
-  sp <- sp %>% dplyr::filter(!(ts %in% duplicates_removed$ts)) %>%
+  ## remove duplicates
+  sp <- removeTSDuplicates(sp, sp$value, output = 0) %>%
     dplyr::filter(value > 0) %>%
     dplyr::filter(value > sensorMin) %>%
     dplyr::filter(value < sensorMax)

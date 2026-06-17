@@ -12,7 +12,11 @@ wmip_hist(
   var = "level",
   datasource = "AT",
   start_time,
-  end_time = format(Sys.Date() + 1, "\%Y\%m\%d")
+  end_time = format(Sys.Date() + 1, "\%Y\%m\%d"),
+  type = "mean",
+  interval = "hour",
+  report = "start",
+  multiplier = 1
 )
 }
 \arguments{
@@ -25,12 +29,18 @@ wmip_hist(
 \item{start_time}{Date* to lookback to. Format = "YYYYMMDD"}
 
 \item{end_time}{Date* to end the extraction period on. Format = "YYYYMMDD". Defaults to the system date plus one day.}
+
+\item{type}{String max, min, mean, end, tot, cum, inst, point}
+
+\item{interval}{String year, month, day, hour, minute, second}
+
+\item{report}{String start or end}
 }
 \value{
 A data frame containing extracted WMIP data for specified gauging station/parameter.
 }
 \description{
-Extracts data from the Water Monitoring Information Portal (WMIP). This platform is the front end of DRDMW's Hydstra database. It contains river level, discharge, water quality and rainfall data to lsit a few. What is available for each gauging station can be seen in the WMIP platform. This should be used to determine what parameter codes can be extracted in this funciton.
+Extracts data from the Water Monitoring Information Portal (WMIP). This platform is the front end of DRDMW's Hydstra database. It contains river level, discharge, water quality and rainfall data to list a few. What is available for each gauging station can be seen in the WMIP platform. This should be used to determine what parameter codes can be extracted in this function
 }
 \examples{
 df_test <- wmip_hist(site_id = "110001D", start_time = "20220801", var = "temperature")

@@ -59,16 +59,12 @@
 #'     )
 #'
 #' @export
-<<<<<<< Updated upstream
-=======
-#'
+
 ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0001, diag = FALSE, output=0,
                     rep_width = 10,
                     med_width = 11,
                     sd_width = 22) {
->>>>>>> Stashed changes
 
-ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0001, diag = FALSE) {
 
   # Define the pattern to match variations of "quality"
   pattern <- "(?i)quality"
@@ -85,6 +81,8 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
 
   sp <- tibble::tibble(ts = df[[posixct_column]])
 
+  #df[[posixct_column]])
+  #sp15 <- changeInterval(sp %>% as.data.frame, Interval = 15)
 
   # Calculate the time differences between consecutive timestamps
   time_diff <- diff(sp[["ts"]])
@@ -93,24 +91,13 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
   #interval <- round(((1440 / as.numeric(mean(time_diff), units = "mins")) / 24) * window)
   interval <- round(window / as.numeric(mean(time_diff), units = "hours"))
 
-<<<<<<< Updated upstream
-=======
-  rep_width = 10
-  med_width = 11
-  sd_width = 22
 
-
->>>>>>> Stashed changes
   #Flatline detection
   sp$centerSD <- zoo::rollapply(df[,2], width = rep_width, FUN = sd, fill = TRUE, align = 'center', na.rm = TRUE)   # a rolling window of Standard Deviation in parameter values - CENTERED -- rep_width determines the window width for all of these options
   sp$leftSD <-   zoo::rollapply(df[,2], width = rep_width, FUN = sd, fill = TRUE, align = 'left', na.rm = TRUE)     # a rolling window of Standard Deviation in parameter values - LEFT -- rep_width determines the window width for all of these options
   sp$rightSD <-  zoo::rollapply(df[,2], width = rep_width, FUN = sd, fill = TRUE, align = 'right', na.rm = TRUE)    # a rolling window of Standard Deviation in parameter values - RIGHT -- rep_width determines the window width for all of these options
 
-<<<<<<< Updated upstream
-=======
-  #plot(sp$ts, sp$ts - lag(sp$ts, 6), log="y")
 
->>>>>>> Stashed changes
   #Spike detection
   #sp$value <- df$Value
   sp$median <- zoo::rollapply(suppressWarnings(df[,2]), width = med_width, FUN = median,  partial = TRUE, na.rm = TRUE, align = 'center')   # rolling median of the log(value) for given width - med_width - centered
@@ -135,7 +122,6 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
 
   #sp$
 
-
   # Use `!!sym(q_name)` for dynamic column reference
   df <- df %>%
     mutate(
@@ -152,12 +138,7 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
       )
     )
 
-<<<<<<< Updated upstream
-=======
-  #unique(df$Quality)
 
-
->>>>>>> Stashed changes
   # Optionally include sp columns in output
   if (diag) {
     df <- bind_cols(df, sp[, -1])  # drop 'ts' column from sp to avoid duplication
@@ -169,4 +150,3 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
     geom_point()
 
 }
-
