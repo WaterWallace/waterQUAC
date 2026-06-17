@@ -59,6 +59,14 @@
 #'     )
 #'
 #' @export
+<<<<<<< Updated upstream
+=======
+#'
+ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0001, diag = FALSE, output=0,
+                    rep_width = 10,
+                    med_width = 11,
+                    sd_width = 22) {
+>>>>>>> Stashed changes
 
 ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0001, diag = FALSE) {
 
@@ -82,16 +90,50 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
   time_diff <- diff(sp[["ts"]])
 
   # Calculate the average data logging interval per day and reduce it to match the defined window. interval = points per window
-  interval <- round(((1440 / as.numeric(mean(time_diff), units = "mins")) / 24) * window)
+  #interval <- round(((1440 / as.numeric(mean(time_diff), units = "mins")) / 24) * window)
+  interval <- round(window / as.numeric(mean(time_diff), units = "hours"))
 
+<<<<<<< Updated upstream
+=======
+  rep_width = 10
+  med_width = 11
+  sd_width = 22
+
+
+>>>>>>> Stashed changes
   #Flatline detection
-  sp$centerSD <- zoo::rollapply(df[,2], width = interval, FUN = sd, fill = TRUE, align = 'center', na.rm = TRUE)   # a rolling window of Standard Deviation in parameter values - CENTERED -- rep_width determines the window width for all of these options
-  sp$leftSD <-   zoo::rollapply(df[,2], width = interval, FUN = sd, fill = TRUE, align = 'left', na.rm = TRUE)     # a rolling window of Standard Deviation in parameter values - LEFT -- rep_width determines the window width for all of these options
-  sp$rightSD <-  zoo::rollapply(df[,2], width = interval, FUN = sd, fill = TRUE, align = 'right', na.rm = TRUE)    # a rolling window of Standard Deviation in parameter values - RIGHT -- rep_width determines the window width for all of these options
+  sp$centerSD <- zoo::rollapply(df[,2], width = rep_width, FUN = sd, fill = TRUE, align = 'center', na.rm = TRUE)   # a rolling window of Standard Deviation in parameter values - CENTERED -- rep_width determines the window width for all of these options
+  sp$leftSD <-   zoo::rollapply(df[,2], width = rep_width, FUN = sd, fill = TRUE, align = 'left', na.rm = TRUE)     # a rolling window of Standard Deviation in parameter values - LEFT -- rep_width determines the window width for all of these options
+  sp$rightSD <-  zoo::rollapply(df[,2], width = rep_width, FUN = sd, fill = TRUE, align = 'right', na.rm = TRUE)    # a rolling window of Standard Deviation in parameter values - RIGHT -- rep_width determines the window width for all of these options
 
+<<<<<<< Updated upstream
+=======
+  #plot(sp$ts, sp$ts - lag(sp$ts, 6), log="y")
+
+>>>>>>> Stashed changes
   #Spike detection
-  sp$median <- zoo::rollapply(suppressWarnings(df[,2]), width = interval, FUN = median,  partial = TRUE, na.rm = TRUE, align = 'center')   # rolling median of the log(value) for given width - med_width - centered
-  sp$sd <-     zoo::rollapply(suppressWarnings(df[,2]), width = interval, FUN = sd, na.rm=TRUE, partial = TRUE, align = 'center')            # rolling standard deviation of the median log(value) as calculated above for a larger window - centered
+  #sp$value <- df$Value
+  sp$median <- zoo::rollapply(suppressWarnings(df[,2]), width = med_width, FUN = median,  partial = TRUE, na.rm = TRUE, align = 'center')   # rolling median of the log(value) for given width - med_width - centered
+  sp$sd <-     zoo::rollapply(suppressWarnings(df[,2]), width = sd_width, FUN = sd, na.rm=TRUE, partial = TRUE, align = 'center')            # rolling standard deviation of the median log(value) as calculated above for a larger window - centered
+
+  #sp$value <- df$Value
+  #plot(sp$ts, df$Value)
+  #sp[(df[[2]] - sp$median) > (4 * sp$sd),]
+  #sp$spike <- abs(df[[2]] - sp$median) > (4 * sp$sd)
+  #sum(sp$spike)
+
+  #plot(df$ts, 4*sp$sd, type="l")
+  #points(df$ts, abs(df[[2]] - sp$median))
+  #legend(
+  #  "topright",
+  #  legend = c("4 × SD", "|value − median|", "Spike"),
+  #  lty    = c(1, NA, NA),   # line for first, points for others
+  #  pch    = c(NA, 1, 1),
+  #  col    = c("black", "black", "red"),
+  #  bty    = "n"
+  #)
+
+  #sp$
 
 
   # Use `!!sym(q_name)` for dynamic column reference
@@ -110,11 +152,21 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
       )
     )
 
+<<<<<<< Updated upstream
+=======
+  #unique(df$Quality)
+
+
+>>>>>>> Stashed changes
   # Optionally include sp columns in output
   if (diag) {
     df <- bind_cols(df, sp[, -1])  # drop 'ts' column from sp to avoid duplication
   }
 
   return(df)
+
+  df %>% ggplot(aes(x=ts, y=Value, colour=Quality)) +
+    geom_point()
+
 }
 

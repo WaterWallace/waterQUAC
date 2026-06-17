@@ -57,8 +57,12 @@ detect_sensor_drift <- function(data, value_col, threshold_multiplier = 2, time_
   # Ensure the data is sorted by time
   data <- data[order(data[[time_col]]), ]
 
+<<<<<<< Updated upstream
 
 
+=======
+  median ( data[[value_col]] )
+>>>>>>> Stashed changes
   # Calculate the threshold based on the multiplier
   threshold <- threshold_multiplier * median(data[[value_col]], na.rm = TRUE)
 
@@ -80,6 +84,56 @@ detect_sensor_drift <- function(data, value_col, threshold_multiplier = 2, time_
 
   # Store cumulative time in the data
   data$cumulative_time_above_threshold <- cumulative_times
+
+  if(1==0)
+  {
+  normalway <- daysAboveThreshold(data, threshold, type = NULL)
+
+  par(mfrow=c(1,2))
+
+  plot(data$ts, normalway, log="y")
+  abline(h=5)
+  plot(data$ts, data$cumulative_time_above_threshold, log="y")
+  abline(h=2)
+
+
+  data$newdrift <- data$cumulative_time_above_threshold > 2
+  data$olddrift <- normalway > 5
+
+  olddrift <- data %>% dplyr::filter(olddrift == TRUE)
+  newdrift <- data %>% dplyr::filter(newdrift == TRUE)
+
+  cbind(
+  xts(data$value, data$ts),
+  xts(olddrift$value, olddrift$ts),
+  xts(newdrift$value, newdrift$ts)) %>% dygraph
+
+
+  oldplot <- data %>% dplyr::filter(ts > "2021-04-14 00:00" & ts < "2023-01-09 00:00" ) %>%
+    ggplot(aes(x= ts, y = value, colour = olddrift)) +
+    geom_point() +
+    labs(title = "5 days above threshold")
+
+  newplot <- data %>% dplyr::filter(ts > "2021-04-14 00:00" & ts < "2023-01-09 00:00" )  %>%
+    ggplot(aes(x= ts, y = value, colour = newdrift)) +
+    geom_point() +
+    labs(title = "2 days rising only above threshold")
+
+  oldplot / newplot
+
+  oldplot <- data %>% dplyr::filter(ts > "2023-10-25 00:00" & ts < "2024-02-02 00:00" ) %>%
+    ggplot(aes(x= ts, y = value, colour = olddrift)) +
+    geom_point() +
+    labs(title = "5 days above threshold")
+
+  newplot <- data %>% dplyr::filter(ts > "2023-10-25 00:00" & ts < "2024-02-02 00:00" )  %>%
+    ggplot(aes(x= ts, y = value, colour = newdrift)) +
+    geom_point() +
+    labs(title = "2 days rising only above threshold")
+
+  oldplot / newplot
+
+  }
 
   # Detect or create quality column
   pattern <- "(?i)quality"

@@ -10,7 +10,14 @@
 #' @param datasource A string referring to the desired data source for the data to be extracted from. Defaults to "AT" which is the Archive-telemetered composite source. Options are: A/TE/AT/ATQ
 #' @param start_time Date* to lookback to. Format = "YYYYMMDD"
 #' @param end_time Date* to end the extraction period on. Format = "YYYYMMDD". Defaults to the system date plus one day.
+<<<<<<< Updated upstream
 #'
+=======
+#' @param type String max, min, mean, end, tot, cum, inst, point
+#' @param interval String year, month, day, hour, minute, second
+#' @param report String start or end
+#' @param multiplier Integer Interval multiplier
+>>>>>>> Stashed changes
 #' @examples
 #' df_test <- wmip_hist(site_id = "110001D", start_time = "20220801", var = "temperature")
 #'
