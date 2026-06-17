@@ -47,7 +47,7 @@
 #' flagged <- ts_anom2(df = df,
 #'                    overwrite = 1:4000,
 #'                    sensorMin = 0,
-#'                    sensorMax = 10)
+#'                    sensorMax = 2000)
 #'
 #' # Plot flagged results
 #'   plotly::plot_ly(data = flagged) |>
@@ -273,33 +273,17 @@ ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 1
       approxfun(ts_grid, roll_sd)
     }
 
+
     f.median <- rolling_median_center_fun(sp$ts,sp$value,window*60)
     f.sd <- rolling_sd_center_fun(sp$ts,sp$value,2*window*60) # double it, as per databricks .py script
     sp$median <- f.median(sp$ts)
     sp$sd <- f.sd(sp$ts)
 
-    #sp$spike2 <- (sp$value - sp$median) > 4*sp$sd
-    #sum(sp$spike %>% na.omit)
-
-    #plot(sp$ts, 4*sp$sd, type="l")
-    #points(sp$ts, abs(sp$value - sp$median))
-    #spikes <- sp%>% dplyr::filter(spike2 == TRUE)
-    #points(spikes$ts, abs(spikes$value - spikes$median), col="red")
-
-    legend(
-      "topright",
-      legend = c("4 × SD", "|value − median|", "Spike"),
-      lty    = c(1, NA, NA),   # line for first, points for others
-      pch    = c(NA, 1, 1),
-      col    = c("black", "black", "red"),
-      bty    = "n"
-    )
-
-
-    names(sp)
 
     sp <- sp %>% mutate(residual = value - median) %>%
-      dplyr::filter(abs(residual) <= 4*sd)
+      mutate(z_score = abs(residual) / pmax(sd,0.01) ) %>%
+      mutate( isspike = z_score < 4) %>%
+      dplyr::select(-z_score)
 
 
   }else{
@@ -330,9 +314,9 @@ ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 1
   spikesremoved <- fullsp[!(fullsp$ts %in% sp$ts),]
   drift_removed <- drift %>% dplyr::filter(quality == "sensor_drift")
 
-  cbind(
-  xts(sp$value, sp$ts),# %>% dygraph
-  xts(spikesremoved$value, spikesremoved$ts)) %>% dygraph
+  #cbind(
+  #xts(sp$value, sp$ts),# %>% dygraph
+  #xts(spikesremoved$value, spikesremoved$ts)) %>% dygraph
 
   # repeated spikes might be real, so exclude them
   #repeated <- removeTSDuplicates(fullsp, !(fullsp$ts %in% sp$ts))
@@ -359,25 +343,24 @@ ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 1
       )
     )
 
-  df$impossible <- df[[posixct_column]] %in% impossible_removed[[1]]
-  df$below <- df[[posixct_column]] %in% below_limits_removed[[1]]
-  df$above <- df[[posixct_column]] %in% above_limits_removed[[1]]
-  df$dupe <- df[[posixct_column]] %in% duplicates_removed[[1]]
-  df$drift <- df[[posixct_column]] %in% drift_removed[[1]]
-  df$spike <- df[[posixct_column]] %in% spikesremoved[[1]]
-  View(df)
+  #df$impossible <- df[[posixct_column]] %in% impossible_removed[[1]]
+  #df$below <- df[[posixct_column]] %in% below_limits_removed[[1]]
+  #df$above <- df[[posixct_column]] %in% above_limits_removed[[1]]
+  #df$dupe <- df[[posixct_column]] %in% duplicates_removed[[1]]
+  #df$drift <- df[[posixct_column]] %in% drift_removed[[1]]
+  #df$spike <- df[[posixct_column]] %in% spikesremoved[[1]]
+  #View(df)
 
+  #spikes <- df %>% dplyr::filter(Quality == "spike")
+  #nospikes <- df %>% dplyr::filter(Quality == "OK")
 
-  spikes <- df %>% dplyr::filter(Quality == "spike")
-  nospikes <- df %>% dplyr::filter(Quality == "OK")
+  #cbind(
+  #xts(spikes$Value, spikes$ts),
+  #xts(nospikes$Value, nospikes$ts)) %>% dygraph
 
-  cbind(
-  xts(spikes$Value, spikes$ts),
-  xts(nospikes$Value, nospikes$ts)) %>% dygraph
-
-  cbind(
-    xts(sp$value, sp$ts),# %>% dygraph
-    xts(spikesremoved$value, spikesremoved$ts)) %>% dygraph
+  #cbind(
+  #  xts(sp$value, sp$ts),# %>% dygraph
+  #  xts(spikesremoved$value, spikesremoved$ts)) %>% dygraph
 
 
   # infill "spikes" in drift points
@@ -403,13 +386,17 @@ ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 1
   return(df)
 
   #plot(df$Quality == "spike")
-  df %>% ggplot(aes(x = ts, y  = Value, colour = Quality)) +
-    geom_point()
+  #df %>% ggplot(aes(x = ts, y  = Value, colour = Quality)) +
+  #  geom_point()
 
 
 
 
 }
 
-
+df <- waterQUAC::TSS_data
+flagged <- ts_anom2(df = df,
+                    overwrite = 1:4000,
+                    sensorMin = 0,
+                    sensorMax = 2000)
 

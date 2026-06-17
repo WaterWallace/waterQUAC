@@ -13,7 +13,7 @@
 #' @param type String max, min, mean, end, tot, cum, inst, point
 #' @param interval String year, month, day, hour, minute, second
 #' @param report String start or end
-#' @param multiplier
+#' @param multiplier Numeric Multiplies value by this
 
 #' @examples
 #' df_test <- wmip_hist(site_id = "110001D", start_time = "20220801", var = "temperature")

@@ -13,7 +13,11 @@ ts_anom2(
   prec = 1e-04,
   diag = FALSE,
   lonelyPoints = 4,
-  time_threshold_days = 2
+  time_threshold_days = 2,
+  flashy = FALSE,
+  invert = FALSE,
+  log = FALSE,
+  medianfilt = TRUE
 )
 }
 \arguments{
@@ -55,4 +59,29 @@ The input data frame (`df`) must include the following columns:
 
 All other columns in the input data frame will be preserved in the output.
 If `diag = TRUE`, additional diagnostic columns (e.g., rolling SD, median) will be appended.
+}
+\examples{
+library(dplyr)
+library(zoo)
+library(plotly)
+
+#example Total Suspended Solids dataframe
+df <- waterQUAC::TSS_data
+
+# Apply anomaly detection
+flagged <- ts_anom2(df = df,
+                   overwrite = 1:4000,
+                   sensorMin = 0,
+                   sensorMax = 10)
+
+# Plot flagged results
+  plotly::plot_ly(data = flagged) |>
+    plotly::add_markers(
+      x = ~ts,
+      y = ~Value,
+      color = ~Quality,
+      marker = list(size = 8)
+    )
+
+
 }
