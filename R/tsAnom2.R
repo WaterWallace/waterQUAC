@@ -61,7 +61,9 @@
 #'
 #' @export
 
-ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 10, prec = 0.0001, diag = FALSE, lonelyPoints = 4, time_threshold_days = 2, flashy = FALSE, invert = FALSE, log = FALSE, medianfilt = TRUE) {
+ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 10,
+                     prec = 0.0001, diag = FALSE, time_threshold_days = 2)
+            {
 
   impossible_removed <- df %>% dplyr::filter(.[[2]] <= 0)
 
@@ -99,8 +101,6 @@ ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 1
     sp$value <- log(sp$value)
   }
 
-  #plot(sp$value * -1)
-
   if(invert)
   {
     invertoffset <- max(sp$value %>% na.omit) + 1
@@ -108,193 +108,296 @@ ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 1
   }
 
 
-
-  #plot(sp)
-
-
-
-  # fullsp for comparison to the despiked
   fullsp <- sp
-
-  ## Remove lonely points
-  sp <- sp %>% mutate(dy = c(diff(as.numeric(ts)/60/60),0)) %>%
-    dplyr::mutate(tdifflag = lag(dy,1,0)) %>%
-    mutate(mindiff = pmin(dy,tdifflag)) %>%
-    mutate(rollingmean = frollmean(mindiff,10, align = "center", fill = NA)) %>%
-    mutate(rollingmean = nafill(rollingmean, type = "locf"))  %>%
-    mutate(rollingmean = nafill(rollingmean, type = "nocb"))  %>%
-    dplyr::filter(mindiff < rollingmean*2 ) %>% # 2 times the rolling average time difference either side is a lonely point
-    dplyr::select(-c(tdifflag,mindiff,rollingmean))
-
-  #plot(sp$ts, sp$value)
-  #sp$value
-  #plot(sp$ts, sp$value)
-  #nrow(sp)
-  #nrow(fullsp)
-
-  #lonely
-  lonelypoints <- fullsp %>% dplyr::filter(!(ts %in% sp$ts))
-
-  #cbind(
-  #xts(fullsp$value, fullsp$ts),
-  #xts(lonelypoints$value, lonelypoints$ts )) %>% dygraph
-
-  #sp <- sp %>%
-    #mutate(dx = abs(c(0,diff(value)))) %>%
-    #mutate(lx = lag(value)) %>%
-    #mutate(dx = ifelse(dx < 0.01, 0.01, dx))# %>%
-    #mutate(pcnt = dx/lx*100) %>%
-    #mutate(logpcnt = log(pcnt))
-
-
-  #plot(sp$ts, sp$logpcnt)
-  #points( cciDespike(data.frame(sp$ts, sp$pcnt), hoursAvg = 6), col="red")
-  # spiky <- data.frame(sp$ts, sp$pcnt)
-
-
-  #plot(despikedlog$sp.logpcnt)
-  #plot(sp$logpcnt)
-  #plot(sp$ts, despiked$sp.ts)
-  #sp
-
-  #despiked <- cciDespike(data.frame(sp$ts, sp$pcnt), hoursAvg = floor(window/2)*2, rocstdev = NULL, spikeaction = "infill" )
-  #despiked <- despiked %>% na.omit %>% mutate(logpcnt = log(sp.pcnt) )
-  #despikedlog <- cciDespike(data.frame(despiked$sp.ts, despiked$logpcnt), hoursAvg = floor(window/2)*2, rocstdev = NULL, spikeaction = "infill")
-
-  #plot(sp$logpcnt)
-  #plot(despiked)
-  #plot(sp$ts, sp$logpcnt, col="red")
-  #points(despikedlog)
-
-  #sp$qc <- "OK"
-  #if(!flashy)
-  #{
-
-
-  #plot(despikedts$spike)
-
-  #good <- despikedts %>% dplyr::filter(spike == "OK")
-  #interp <- despikedts %>% dplyr::filter(spike != "OK")
-
-
-  #plot(df$Value)
-  #if(invert)
-  #{
-  #  despikedts[[2]] <- (despikedts[[2]] - invertoffset) * -1
-  #}
-
-  #if(log)
-  #{
-  #  despikedts[[2]] <- exp(despikedts[[2]])
-  #}
-
-  #good <- despikedts %>% dplyr::filter(spike == "OK")
-  #interp <- despikedts %>% dplyr::filter(spike != "OK")
-
-
-  #cbind(
-  #  xts(df$Value, df$ts),
-  #  xts(good$value, good$ts),
-  #  xts(interp$value, interp$ts)
-  #) %>% dygraph
-
-
-  #plot(despikedts$ts, despikedts$value )
-  #despikedts2 <- cciDespike(despikedts %>% dplyr::select(ts, value), hoursAvg = floor(window/2)*2,
-  #                         rocstdev = NULL,
-  #                        spikeaction = "omit")
-
-  # I want to return
-  #sp <- despikedts[ despikedts$ts %in% despikedts2$ts, ]
-
-
-  #}
-
-  #sp <- sp[ sp$ts %in% despiked$sp.ts &
-  #            sp$ts %in% despikedlog$sp.ts,]
-
-
-  #nrow(sp)
-  #lag(sp$value)
-  #nrow(fullsp)
-  #nrow(sp)
-  #cbind(
-  #     xts(sp$rollingmean*2, sp$ts),
-  #     xts(sp$mindiff, sp$ts),
-  #     xts(sp$value, sp$ts)
-  #     ) %>% dygraph
 
   multiplier <- ifelse(invert, 1,-1)
 
   ## Remove the point before a sudden drop
-  sp <- sp %>% mutate(dy = c(diff(as.numeric(ts)/60/60),0)) %>%
-    mutate(dx = c(diff(value),0)) %>% mutate(dydx = dx/dy) %>%
-    dplyr::filter(dydx > multiplier*5*sd(na.omit(dydx))) %>% # only remove negative drops, 10 standard deviations from normal
-    dplyr::select(-c(dy, dx, dydx))
+  #sp <- sp %>% mutate(dy = c(diff(as.numeric(ts)/60/60),0)) %>%
+  #  mutate(dx = c(diff(value),0)) %>% mutate(dydx = dx/dy) %>%
+  # dplyr::filter(dydx > multiplier*10*sd(na.omit(dydx))) %>% # only remove negative drops, 10 standard deviations from normal
+  #  dplyr::select(-c(dy, dx, dydx))
 
 
-  if(medianfilt)
-  {
-    library(RcppRoll)
-    library(data.table)
-
-    rolling_median_center_fun <- function(x,y,window_minutes) {
-      # returns a lookup function
-      f.sp <- approxfun(x, y)                  # linear interpolation
-      ts_grid <- seq(min(x), max(x), by = 10*60)  # 1-minute steps
-      minutey <- f.sp(ts_grid)                 # numeric vector of interpolated values
-      window <- window_minutes
-      half_w <- floor(window/2)
-      n <- length(minutey)
-      minutey_pad <- c(rep(minutey[1], half_w), minutey, rep(minutey[n], half_w))
-      roll_pad <- roll_medianr(minutey_pad, n = window)
-
-      return(approxfun(ts_grid, roll_pad[(window):(window + n - 1)]))
-    }
-
-    rolling_sd_center_fun <- function(x, y, window_minutes) {
-      f.sp <- approxfun(x, y)
-      ts_grid <- seq(min(x), max(x), by = 10*60)
-      minutey <- f.sp(ts_grid)
-      window <- window_minutes
-      half_w <- floor(window / 2)
-      n <- length(minutey)
-      minutey_pad <- c(
-        rep(minutey[1], half_w),
-        minutey,
-        rep(minutey[n], half_w)
-      )
-      roll_sd_pad <- data.table::frollapply(
-        minutey_pad,
-        n = window,
-        FUN = function(z) sqrt(mean((z - mean(z))^2))
-      )
-      roll_sd <- roll_sd_pad[window:(window + n - 1)]
-      approxfun(ts_grid, roll_sd)
-    }
+  halflife_mins <- 60
+  sp$dt <- c(0,diff(sp$ts, units = "mins"))
+  sp$dynamic_alpha <- 1 - exp(-sp$dt / halflife_mins)
 
 
-    f.median <- rolling_median_center_fun(sp$ts,sp$value,window*60)
-    f.sd <- rolling_sd_center_fun(sp$ts,sp$value,2*window*60) # double it, as per databricks .py script
-    sp$median <- f.median(sp$ts)
-    sp$sd <- f.sd(sp$ts)
-
-
-    sp <- sp %>% mutate(residual = value - median) %>%
-      mutate(z_score = abs(residual) / pmax(sd,0.01) ) %>%
-      mutate( isspike = z_score < 4) %>%
-      dplyr::select(-z_score)
-
-
-  }else{
-    # slower moving, appropriate to do over original data
-    sp <- cciDespike(spiky = sp %>% dplyr::select(ts, value) %>% as.data.frame, hoursAvg = floor(window/2)*2,
-                     stdevs = 2,
-                     rocstdev = NULL,
-                     spikeaction = "omit",
-                     passes = 1, doPlot = TRUE)
-
+  # Made this flexible to actually storing the running_mean and running_var in the parquet in the platform
+  # That way it won't need to loop from the beginning every time
+  if(!("running_mean" %in% names(sp))){
+    sp$running_mean <- c(sp$value[1], rep(NA,nrow(sp)-1))
+    sp$z_score <- c(0, rep(NA,nrow(sp)-1))
+    sp$running_var <- c((sp$value[1] * 0.1)^2, rep(NA,nrow(sp)-1))
   }
+
+
+  z_threshold <- c(0.001,4)
+  spdev <- 0
+  #min(which(is.na(sp$running_mean)))
+  for(row in which(is.na(sp$running_mean)))
+  {
+    last_running_mean <- sp$running_mean[(row-1)]
+    last_running_var <- sp$running_var[(row-1)]
+
+    dynamic_alpha <- sp$dynamic_alpha[row]
+
+    running_mean <- (1 - dynamic_alpha) * last_running_mean + dynamic_alpha * sp$value[row]
+    this_var <- (1 - dynamic_alpha) * last_running_var + dynamic_alpha *  spdev
+
+    spdev <- (sp$value[row] - running_mean)^2 # squared deviance
+    #residual <- sp$value[row] - running_mean # deviance
+
+
+    # z_score determines whether it's a spike or not, >4 or <0.001 is a spike
+    z_score <- abs(sp$value[row] - running_mean) / max(sqrt(this_var), 0.01)
+    sp$z_score[row] <- z_score
+
+    if(z_score > z_threshold[2] | z_score < z_threshold[1] ){
+      sp$running_mean[row] <- last_running_mean
+      sp$running_var[row] <- last_running_var
+    }else{ # don't update mean and variance on a spike
+      sp$running_mean[row] <- running_mean
+      sp$running_var[row] <- this_var
+    }
+  }
+
+
+
+
+
+  # transform back for drift detection ( it doesn't like the negatives from log)
+  if(invert)
+  {
+    sp[[2]] <- (sp[[2]] - invertoffset) * -1
+  }
+
+  if(log)
+  {
+    sp[[2]] <- exp(sp[[2]])
+  }
+
+
+  # remove z_score spikes
+  high <- sp %>% dplyr::filter(z_score > z_threshold[2])
+  # remove z_score spikes
+  low <- sp %>% dplyr::filter(z_score < z_threshold[1])
+
+  # remove z_score spikes
+  sp <- sp %>% dplyr::filter(z_score > z_threshold[1] & z_score < z_threshold[2])
+
+  cbind(xts(sp$value, sp$ts),
+        xts(high$value, high$ts),
+        xts(low$value, low$ts)
+  ) %>% dygraph
+
+  # if it's rising for 2 days
+  drift <- sp %>% detect_sensor_drift("value", time_threshold_days = 2, overwrite = overwrite, type = "rising")
+
+  spikesremoved <- fullsp[!(fullsp$ts %in% sp$ts),]
+  drift_removed <- drift %>% dplyr::filter(quality == "sensor_drift")
+
+  #cbind(
+  #xts(sp$value, sp$ts),# %>% dygraph
+  #xts(spikesremoved$value, spikesremoved$ts)) %>% dygraph
+
+  # repeated spikes might be real, so exclude them
+  #repeated <- removeTSDuplicates(fullsp, !(fullsp$ts %in% sp$ts))
+  #spikesremoved <- spikesremoved[spikesremoved$ts %in% repeated$ts,]
+
+  # Use `!!sym(q_name)` for dynamic column reference
+  df <- df %>%
+    mutate(
+      !!sym(q_name) := ifelse(!is.na(.data[[q_name]]) & !(.data[[q_name]] %in% overwrite),
+                              as.character(.data[[q_name]]),
+                              NA_character_)
+    )
+
+  df <- df %>%
+    mutate(
+      !!sym(q_name) := case_when(
+        .data[[posixct_column]] %in% impossible_removed[[1]] ~ 'impossible',
+        .data[[posixct_column]] %in% below_limits_removed[[1]] ~ 'below_limits',
+        .data[[posixct_column]] %in% above_limits_removed[[1]] ~ 'above_limits',
+        .data[[posixct_column]] %in% duplicates_removed$ts ~ 'repeating_value',
+        .data[[posixct_column]] %in% drift_removed$ts ~ 'sensor_drift',
+        .data[[posixct_column]] %in% spikesremoved$ts ~ 'spike',
+        TRUE ~ "OK"
+      )
+    )
+
+  #df$impossible <- df[[posixct_column]] %in% impossible_removed[[1]]
+  #df$below <- df[[posixct_column]] %in% below_limits_removed[[1]]
+  #df$above <- df[[posixct_column]] %in% above_limits_removed[[1]]
+  #df$dupe <- df[[posixct_column]] %in% duplicates_removed[[1]]
+  #df$drift <- df[[posixct_column]] %in% drift_removed[[1]]
+  #df$spike <- df[[posixct_column]] %in% spikesremoved[[1]]
+  #View(df)
+
+  #spikes <- df %>% dplyr::filter(Quality == "spike")
+  #nospikes <- df %>% dplyr::filter(Quality == "OK")
+
+  #cbind(
+  #xts(spikes$Value, spikes$ts),
+  #xts(nospikes$Value, nospikes$ts)) %>% dygraph
+
+  #cbind(
+  #  xts(sp$value, sp$ts),# %>% dygraph
+  #  xts(spikesremoved$value, spikesremoved$ts)) %>% dygraph
+
+
+  # infill "spikes" in drift points
+  driftpoints <- lead(df[[sym(q_name)]],1) == "sensor_drift" & lag(df[[sym(q_name)]],1) == "sensor_drift"
+  df[[sym(q_name)]][driftpoints] <- "sensor_drift"
+
+  # Optionally include sp columns in output
+  if (diag) {
+    df <- bind_cols(df, sp[, -1])  # drop 'ts' column from sp to avoid duplication
+  }
+
+  #plot(df$Value)
+  #if(invert)
+  #{
+  #  df[[2]] <- (df[[2]] - invertoffset) * -1
+  #}
+
+  #if(log)
+  #{
+  #  df[[2]] <- exp(df[[2]])
+  #}
+
+  return(df)
+
+  #plot(df$Quality == "spike")
+  #df %>% ggplot(aes(x = ts, y  = Value, colour = Quality)) +
+  #  geom_point()
+
+
+
+
+}
+
+df <- waterQUAC::TSS_data
+flagged <- ts_anom2(df = df,
+                    overwrite = 1:4000,
+                    sensorMin = 0,
+                    sensorMax = 2000)
+
+unique(processed$Quality)
+flagged %>% ggplot(aes(x=ts, y=Value, colour=Quality)) +
+  geom_point() +
+  labs(title = "EC JRC (all QC)", y = "EC microsiemens")
+
+
+anom_cols <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 10,
+                     prec = 0.0001, diag = FALSE, time_threshold_days = 2)
+{
+
+  df$flag <- NA
+  # function applies rules based filters, and adds columns to filter by
+
+
+  # Define the pattern to match variations of "quality"
+  pattern <- "(?i)quality"
+
+  # Check if any column name matches the pattern
+  if (!any(grepl(pattern, colnames(df)))) {
+    df$quality <- NA
+  } else {
+    q_name <- colnames(df)[grep(pattern, colnames(df))]
+  }
+
+  # Find the column name that is of class "posixct"
+  posixct_column <- names(df)[sapply(df, function(x) any(class(x) == "POSIXct"))]
+  value_col <- names(df)[2]
+
+  sp <- df %>% dplyr::select(posixct_column, value_col)
+
+  #sp <- tibble::tibble(ts = df[[posixct_column]], value = df[[2]])
+
+  duplicates_removed <- removeTSDuplicates(sp, sp[[value_col]], output = 1)
+
+  # apply rules
+  df <- df %>% mutate(flag = ifelse(.[[2]] > sensorMax, "above_max", flag)) %>%
+    mutate(flag = ifelse(.[[2]] < sensorMin, "below_min", flag)) %>%
+    mutate(flag = ifelse(.[[2]] <= 0, "impossible", flag)) %>%
+    mutate(flag = ifelse(.data[[posixct_column]] %in%  duplicates_removed[[posixct_column]], "dupe", flag)) %>%
+    mutate(flag = ifelse(is.na(.data[[value_col]]), "Blank",flag ))
+
+  fulldf <- df
+  df <- df %>% dplyr::filter(is.na(flag))
+
+  ######################################
+  ## Clean data before despiking
+  sp <- sp %>% dplyr::filter(ts %in% df[[posixct_column]])
+
+  ## Remove the point before a sudden drop
+  #sp <- sp %>% mutate(dy = c(diff(as.numeric(ts)/60/60),0)) %>%
+  #  mutate(dx = c(diff(value),0)) %>% mutate(dydx = dx/dy) %>%
+  # dplyr::filter(dydx > multiplier*10*sd(na.omit(dydx))) %>% # only remove negative drops, 10 standard deviations from normal
+  #  dplyr::select(-c(dy, dx, dydx))
+
+  halflife_mins <- 60
+  sp$dt <- c(0,diff(sp$ts, units = "mins"))
+  sp$dynamic_alpha <- 1 - exp(-sp$dt / halflife_mins)
+
+
+  # Made this flexible to actually storing the running_mean and running_var in the parquet in the platform
+  # That way it won't need to loop from the beginning every time
+  if(!("running_mean" %in% names(sp))){
+    sp$running_mean <- c(sp[[value_col]][1], rep(NA,nrow(sp)-1))
+    sp$z_score <- c(0, rep(NA,nrow(sp)-1))
+    sp$running_var <- c((sp[[value_col]][1] * 0.1)^2, rep(NA,nrow(sp)-1))
+  }
+
+
+  z_threshold <- c(0.001,4)
+  #min(which(is.na(sp$running_mean)))
+  for(row in which(is.na(sp$running_mean)))
+  {
+    last_running_mean <- sp$running_mean[(row-1)]
+    last_running_var <- sp$running_var[(row-1)]
+
+    dynamic_alpha <- sp$dynamic_alpha[row]
+
+    # z_score determines whether it's a spike or not, >4 or <0.001 is a spike
+    z_score <- abs( sp[[value_col]][row] - last_running_mean) / max(sqrt(last_running_var), 0.01)
+    sp$z_score[row] <- z_score
+
+    running_mean <- (1 - dynamic_alpha) * last_running_mean + dynamic_alpha * sp[[value_col]][row]
+    spdev <- ( sp[[value_col]][row] - running_mean)^2 # squared deviance
+    this_var <- (1 - dynamic_alpha) * last_running_var + dynamic_alpha *  spdev
+
+    #residual <- sp$value[row] - running_mean # deviance
+
+    if(z_score > z_threshold[2] | z_score < z_threshold[1] ){
+      sp$running_mean[row] <- last_running_mean
+      sp$running_var[row] <- last_running_var
+    }else{ # don't update mean and variance on a spike
+      sp$running_mean[row] <- running_mean
+      sp$running_var[row] <- this_var
+    }
+  }
+
+
+  # remove z_score spikes
+  high <- sp %>% dplyr::filter(z_score > z_threshold[2])
+  # remove z_score spikes
+  low <- sp %>% dplyr::filter(z_score < z_threshold[1])
+
+
+  cbind(xts(sp[[value_col]], sp$ts),
+        xts(high[[value_col]], high$ts),
+        xts(low[[value_col]], low$ts)
+        ) %>% dygraph
+
+
+
+  #cbind(xts(sp$value, sp$ts),
+  #      xts(high$value, high$ts),
+  #      xts(low$value, low$ts)
+  #      ) %>% dygraph
 
   # transform back for drift detection ( it doesn't like the negatives from log)
   if(invert)
@@ -394,9 +497,6 @@ ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 1
 
 }
 
-df <- waterQUAC::TSS_data
-flagged <- ts_anom2(df = df,
-                    overwrite = 1:4000,
-                    sensorMin = 0,
-                    sensorMax = 2000)
+
+
 

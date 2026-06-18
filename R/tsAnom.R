@@ -139,6 +139,10 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
     )
 
 
+  str(sp$centerSD)
+  length(sp$centerSD)
+  dim(sp$centerSD)
+
   # Optionally include sp columns in output
   if (diag) {
     df <- bind_cols(df, sp[, -1])  # drop 'ts' column from sp to avoid duplication
