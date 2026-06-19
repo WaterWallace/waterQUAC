@@ -122,21 +122,30 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
 
   #sp$
 
+  df <- df %>%
+    mutate(
+      !!sym(q_name) := ifelse(!is.na(.data[[q_name]]) & !(.data[[q_name]] %in% overwrite),
+                              as.character(.data[[q_name]]),
+                              NA_character_)
+    )
+
+
   # Use `!!sym(q_name)` for dynamic column reference
   df <- df %>%
     mutate(
       !!sym(q_name) := case_when(
-        !is.na(.data[[q_name]]) & !(.data[[q_name]] %in% overwrite) ~ as.character(.data[[q_name]]),
         df[[2]] < 0 ~ 'impossible',
         df[[2]] < sensorMin ~ 'below_limits',
         df[[2]] > sensorMax ~ 'above_limits',
-        sp$centerSD < prec ~ 'repeating_value',
-        sp$leftSD < prec ~ 'repeating_value',
-        sp$rightSD < prec ~ 'repeating_value',
-        abs(suppressWarnings(df[[2]] - sp$median)) > (4 * sp$sd) ~ 'spike',
+        sp$centerSD[,1] < prec ~ 'repeating_value',
+        sp$leftSD[,1] < prec ~ 'repeating_value',
+        sp$rightSD[,1] < prec ~ 'repeating_value',
+        abs(suppressWarnings(df[[2]] - sp$median[,1])) > (4 * sp$sd[,1]) ~ 'spike',
         TRUE ~ 'OK'
       )
     )
+
+
 
 
   str(sp$centerSD)
