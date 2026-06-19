@@ -61,7 +61,6 @@ detect_sensor_drift <- function(data, value_col, threshold_multiplier = 2, time_
   data <- data[order(data[[time_col]]), ]
 
 
-
   # Calculate the threshold based on the multiplier
   threshold <- threshold_multiplier * median(data[[value_col]], na.rm = TRUE)
 

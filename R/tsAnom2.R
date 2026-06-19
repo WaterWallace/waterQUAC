@@ -275,6 +275,57 @@ SAVED_ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, wind
 
 }
 
+# standalone real time spike detection
+spike_detection <- function(ts,
+                            value,
+                            last_t = 0,
+                            last_running_mean = NULL,
+                            last_running_var = NULL,
+                            last_dev = NULL,
+                            halflife_mins = 120,
+                            z_threshold = c(0.001,4))
+{
+
+  if(is.null(last_running_mean)) last_running_mean <- value
+  if(is.null(last_running_var)) last_running_var <- (0.1*value)^2
+  if(is.null(last_dev)) last_dev <- (0.1*value)
+
+  # to run this real time spike detection, the only values it needs are these 4 values
+  #last_t <- sp$ts[(row-1)] # last time
+  #last_running_mean <- sp$running_mean[(row-1)] # running mean
+  #last_running_var <- sp$running_var[(row-1)] # variance
+  #last_dev <- sp$dev[(row-1)] # squared deviance
+
+  # exponentional decay
+  dt <- difftime(ts, last_t, units = "mins") %>% as.numeric # change in time
+  dynamic_alpha <- 1 - exp(-dt / halflife_mins) # exponentional decay factor
+
+  # apply exponential decay, older values have less influence
+  # daily values are almost entirely independent
+  # 15 minute value are worth about 10% of the weighted mean
+  running_mean <- (1 - dynamic_alpha ) * last_running_mean + dynamic_alpha * value
+  this_var <- (1 - dynamic_alpha) * last_running_var + dynamic_alpha * last_dev
+  this_dev <- ( value - running_mean )^2 # squared deviance lagged
+
+  # z_score determines whether it's a spike or not, >4 or <0.001 is a spike
+  # not strictly a z score, but calculated on a variance calculated from a lagged squared deviance
+  # so it's the deviance from the mean, divided by the standard deviation (sqrt of variance)
+
+  # e.g. for z_score: if deviance / stddev = 4 that's like deviance = 4 * stddev, just neater
+  z_score <- abs( value - running_mean) / max(sqrt(this_var), 0.01)
+  # update z_score each time
+
+  # if z score is outside the thresholds
+  # then don't update the running mean
+  spike <- (z_score > z_threshold[2] | z_score < z_threshold[1] )
+  weight <- ifelse(spike, 0.1, 1)
+
+  running_mean <- (1 - weight) * last_running_mean + weight * running_mean
+  this_var <- (1 - weight) * last_running_var + weight * this_var
+
+  return(data.frame(ts = ts, value = value, mean = running_mean, var = this_var, dev = this_dev, z_score, spike))
+}
+
 ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 10,
                      prec = 0.0001, diag = FALSE, time_threshold_days = 2, log = FALSE, invert = FALSE)
 {
@@ -315,6 +366,8 @@ ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 1
 
   message("finished dedeupe")
 
+  fullsp <- sp
+
   if(invert)
   {
     invertoffset <- sensorMax + 1
@@ -327,8 +380,6 @@ ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 1
   }
 
 
-  fullsp <- sp
-
   #plot(sp$value)
 
   #multiplier <- ifelse(invert, 1,-1)
@@ -339,71 +390,27 @@ ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 1
   # dplyr::filter(dydx > multiplier*10*sd(na.omit(dydx))) %>% # only remove negative drops, 10 standard deviations from normal
   #  dplyr::select(-c(dy, dx, dydx))
 
+  last_t <- 0 # last time
+  last_running_mean <- sp$mean[1] # running mean
+  last_running_var <- sp$var[1] # variance
+  last_dev <- sp$dev[1] # squared deviance
 
-  halflife_mins <- 120
-  sp$dt <- c(0,diff(sp$ts, units = "mins"))
-  sp$dynamic_alpha <- 1 - exp(-sp$dt / halflife_mins)
+  despike_batch <- list()
+  despiked <- list()
 
-
-  # Made this flexible to actually storing the running_mean and running_var in the parquet in the platform
-  # That way it won't need to loop from the beginning every time
-  if(!("running_mean" %in% names(sp))){
-    sp$running_mean <- c(sp$value[1], rep(NA,nrow(sp)-1))
-    sp$z_score <- c(0, rep(NA,nrow(sp)-1))
-    sp$running_var <- c((sp$value[1] * 0.1)^2, rep(NA,nrow(sp)-1))
-    sp$dev <- c(0, rep(NA,nrow(sp)-1))
-
-  }
-
-
-  z_threshold <- c(0.001,4)
-  halflife_mins <- 120
-
-
-
-
-  #spdev <- 0
-  #min(which(is.na(sp$running_mean)))
-  for(row in which(is.na(sp$running_mean)))
+  #sp <- na.omit(df)
+  for(row in 2:nrow(sp))
   {
-    # to run this real time spike detection, the only values it needs are these 4 values
-    last_t <- sp$ts[(row-1)] # last time
-    last_running_mean <- sp$running_mean[(row-1)] # running mean
-    last_running_var <- sp$running_var[(row-1)] # variance
-    last_dev <- sp$dev[(row-1)] # squared deviance
-
-    # exponentional decay
-    dt <- difftime(sp$ts[row], last_t, units = "mins") %>% as.numeric # change in time
-    dynamic_alpha <- 1 - exp(-dt / halflife_mins) # exponentional decay factor
-
-    # apply exponential decay, older values have less influence
-    # daily values are almost entirely independent
-    # 15 minute value are worth about 10% of the weighted mean
-    running_mean <- (1 - dynamic_alpha ) * last_running_mean + dynamic_alpha * sp$value[row]
-    this_var <- (1 - dynamic_alpha) * last_running_var + dynamic_alpha * last_dev
-    sp$dev[row] <- ( sp$value[row] - running_mean )^2 # squared deviance lagged
-
-    # z_score determines whether it's a spike or not, >4 or <0.001 is a spike
-    # not strictly a z score, but calculated on a variance calculated from a lagged squared deviance
-    # so it's the deviance from the mean, divided by the standard deviation (sqrt of variance)
-
-    # e.g. for z_score: if deviance / stddev = 4 that's like deviance = 4 * stddev, just neater
-    z_score <- abs( sp$value[row] - running_mean) / max(sqrt(this_var), 0.01)
-    # update z_score each time
-    sp$z_score[row] <- z_score
-
-    # if z score is outside the thresholds
-    # then don't update the running mean
-    if(z_score > z_threshold[2] | z_score < z_threshold[1] ){ # spike!
-      weight <- 0.1 # weight 0 means, use last_running_mean, don't update mean
-    }else{
-      weight <- 1 # weight 1 means update with new running_mean etc
-    }
-    sp$running_mean[row] <- (1 - weight) * last_running_mean + weight * running_mean
-    sp$running_var[row] <- (1 - weight) * last_running_var + weight * this_var
-
-
+    # loop through each point
+    spike_detect <- spike_detection(ts = sp$ts[row], value = sp$value[row], last_t, last_running_mean, last_running_var, last_dev)
+    last_t <- spike_detect$ts
+    last_running_mean <- spike_detect$mean
+    last_running_var <- spike_detect$var
+    last_dev <- spike_detect$dev
+    despiked[[length(despiked) + 1]] <- spike_detect
   }
+  despike_batch[["last"]] <- spike_detect
+  despike_batch[["data"]] <- rbindlist(despiked)
 
 
   message("finished loop")
@@ -417,31 +424,39 @@ ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 1
 #  ) %>% dygraph
 
   # transform back for drift detection ( it doesn't like the negatives from log)
+  #if(log)
+  #{
+  #  sp[[2]] <- exp(sp[[2]])
+  #}
 
-  return(sp)
-
-  if(log)
-  {
-    sp[[2]] <- exp(sp[[2]])
-  }
-
-  if(invert)
-  {
-    sp[[2]] <- (sp[[2]] - invertoffset) * -1
-  }
+  #if(invert)
+  #{
+  #  sp[[2]] <- (sp[[2]] - invertoffset) * -1
+  #}
 
 
   #plot(sp$z_score)
 
   # remove z_score spikes
-  sp <- sp %>% dplyr::filter(z_score > z_threshold[1] & z_score < z_threshold[2])
+  #sp <- sp %>% dplyr::filter(z_score > z_threshold[1] & z_score < z_threshold[2])
+
+
 
   #return(sp)
   # if it's rising for 2 days
-  drift <- sp %>% detect_sensor_drift("value", time_threshold_days = 2, overwrite = overwrite, type = "rising")
+  drift <- despike_batch[["data"]] %>% dplyr::filter(spike == FALSE) %>%
+    dplyr::select(ts, value) %>%
+    detect_sensor_drift("value", time_threshold_days = 2, overwrite = overwrite, type = "rising")
 
-  spikesremoved <- fullsp[!(fullsp$ts %in% sp$ts),]
+  despiked_ts <- despike_batch[["data"]] %>%
+    dplyr::filter(spike == FALSE) %>%
+    pull(ts)
+
+  spikesremoved <- fullsp[!(fullsp$ts %in% despiked_ts),]
   drift_removed <- drift %>% dplyr::filter(quality == "sensor_drift")
+
+  tail(drift)
+  despike_batch$last
 
   message("finished drift")
   #cbind(
@@ -524,78 +539,9 @@ ts_anom2 <- function(df, overwrite = c(1:4000), sensorMin, sensorMax, window = 1
 
 }
 
-# standalone real time spike detection
-spike_detection <- function(t,
-                            value,
-                            last_t = 0,
-                            last_running_mean = NULL,
-                            last_running_var = NULL,
-                            last_dev = NULL,
-                            halflife_mins = 120,
-                            z_threshold = c(0.001,4))
-{
 
-  if(is.null(last_running_mean)) last_running_mean <- value
-  if(is.null(last_running_var)) last_running_var <- (0.1*value)^2
-  if(is.null(last_dev)) last_dev <- (0.1*value)
 
-  # to run this real time spike detection, the only values it needs are these 4 values
-  #last_t <- sp$ts[(row-1)] # last time
-  #last_running_mean <- sp$running_mean[(row-1)] # running mean
-  #last_running_var <- sp$running_var[(row-1)] # variance
-  #last_dev <- sp$dev[(row-1)] # squared deviance
 
-  # exponentional decay
-  dt <- difftime(t, last_t, units = "mins") %>% as.numeric # change in time
-  dynamic_alpha <- 1 - exp(-dt / halflife_mins) # exponentional decay factor
-
-  # apply exponential decay, older values have less influence
-  # daily values are almost entirely independent
-  # 15 minute value are worth about 10% of the weighted mean
-  running_mean <- (1 - dynamic_alpha ) * last_running_mean + dynamic_alpha * value
-  this_var <- (1 - dynamic_alpha) * last_running_var + dynamic_alpha * last_dev
-  this_dev <- ( value - running_mean )^2 # squared deviance lagged
-
-  # z_score determines whether it's a spike or not, >4 or <0.001 is a spike
-  # not strictly a z score, but calculated on a variance calculated from a lagged squared deviance
-  # so it's the deviance from the mean, divided by the standard deviation (sqrt of variance)
-
-  # e.g. for z_score: if deviance / stddev = 4 that's like deviance = 4 * stddev, just neater
-  z_score <- abs( value - running_mean) / max(sqrt(this_var), 0.01)
-  # update z_score each time
-
-  # if z score is outside the thresholds
-  # then don't update the running mean
-  spike <- (z_score > z_threshold[2] | z_score < z_threshold[1] )
-  weight <- ifelse(spike, 0.1, 1)
-
-  running_mean <- (1 - weight) * last_running_mean + weight * running_mean
-  this_var <- (1 - weight) * last_running_var + weight * this_var
-
-  return(data.frame(t = t, mean = running_mean, var = this_var, dev = this_dev, z_score, spike))
-}
-
-last_t <- 0 # last time
-last_running_mean <- sp$mean[1] # running mean
-last_running_var <- sp$var[1] # variance
-last_dev <- sp$dev[1] # squared deviance
-
-despike_batch <- list()
-despiked <- list()
-
-sp <- na.omit(df)
-for(row in 2:nrow(sp))
-{
-  # loop through each point
-  spike_detect <- spike_detection(t = sp$ts[row], value = sp$Value[row], last_t, last_running_mean, last_running_var, last_dev)
-  last_t <- spike_detect$t
-  last_running_mean <- spike_detect$mean
-  last_running_var <- spike_detect$var
-  last_dev <- spike_detect$dev
-  despiked[[length(despiked) + 1]] <- spike_detect
-}
-despike_batch[["last"]] <- spike_detect
-despike_batch[["data"]] <- rbindlist(despiked)
 
 plot(despike_batch$data$z_score, log = "y")
 abline(h=4, col="blue")
