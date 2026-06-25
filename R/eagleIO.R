@@ -22,8 +22,15 @@
 #'
 #' @export
 
-eio_hist <- function(key, node_id, start_time, end_time = format(Sys.time() + 86400, "%Y-%m-%dT%H:%M:%SZ")) {
+eio_hist <- function(key, node_id, start_time = NULL, end_time = Sys.time()) {
   #param -- MUST be a node ID corresponding to a historic data source (ie level/N-NO3/Turbidity)
+
+  if(is.null(start_time)) start_time <- as.POSIXct("2010-01-01 00:00")
+  if(inherits(start_time, "POSIXct")) attr(start_time, "tzone") <- "UTC"
+  if(inherits(end_time, "POSIXct")) attr(end_time, "tzone") <- "UTC"
+
+  start_time <- format(start_time, "%Y-%m-%dT%H:%M:%SZ")
+  end_time <- format(end_time, "%Y-%m-%dT%H:%M:%SZ")
 
   URLData <- paste("https://api.eagle.io/api/v1/historic/?params=",node_id,"&startTime=",start_time,"&endTime=",end_time,"&qualityExcluded=NONE",sep = "")
 

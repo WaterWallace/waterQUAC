@@ -55,119 +55,11 @@
 #'
 #'
 #' @export
-drift_detect_rt <- function(ts, value, last_t, last_value,
-                                   last_mean = NULL, cumulative_time = NULL,
-                                   threshold_multiplier = 1.1, time_threshold_days = 2, halflife = 120,
-                                   type = NULL)
-{
-
-
-  if(is.null(last_mean))  last_mean <- value
-
-  # exponentional decay
-  dt <- difftime(ts, last_t, units = "days") %>% as.numeric # change in time
-  dynamic_alpha <- 1 - exp(-dt / 120) # exponentional decay factor, with a 30 day halflife
-
-  #
-  last_mean <- ( (1 - dynamic_alpha ) * last_mean + dynamic_alpha * value )
-  threshold <- threshold_multiplier * last_mean
-
-  # increment cumulative_time
-  if(value > threshold)
-  {
-    dt <- min(1, dt) # prevent long gaps instantly being drift
-    if(type == "rising")
-    {
-      if ( value > last_value ){
-        cumulative_time <- cumulative_time + dt # cumulative time in days
-      }
-    }else{
-      cumulative_time <- cumulative_time + dt # cumulative time in days
-    }
-  }else{
-    cumulative_time <- 0
-  }
-
-  drift <- ( cumulative_time > time_threshold_days )
-
-  data.frame(ts = ts, value = value, cumulative_time = cumulative_time, mean = last_mean, drift = drift)
-
-}
-
-
-# standalone real time spike detection
-spike_detect_rt <- function(ts,
-                            value,
-                            last_t = 0,
-                            last_running_mean = NULL,
-                            last_running_var = NULL,
-                            last_dev = NULL,
-                            halflife_mins = 120,
-                            z_threshold = c(0.001,4))
-{
-
-  if(is.null(last_running_mean)) last_running_mean <- value
-  if(is.null(last_running_var)) last_running_var <- (0.1*value)^2
-  if(is.null(last_dev)) last_dev <- (0.1*value)
-
-  # to run this real time spike detection, the only values it needs are these 4 values
-  #last_t <- sp$ts[(row-1)] # last time
-  #last_running_mean <- sp$running_mean[(row-1)] # running mean
-  #last_running_var <- sp$running_var[(row-1)] # variance
-  #last_dev <- sp$dev[(row-1)] # squared deviance
-
-  # exponentional decay
-  dt <- difftime(ts, last_t, units = "mins") %>% as.numeric # change in time
-  dynamic_alpha <- 1 - exp(-dt / halflife_mins) # exponentional decay factor
-
-  # apply exponential decay, older values have less influence
-  # daily values are almost entirely independent
-  # 15 minute value are worth about 10% of the weighted mean
-  running_mean <- (1 - dynamic_alpha ) * last_running_mean + dynamic_alpha * value
-
-  this_dev <- abs( value - running_mean )#^2 #
-
-  # normal (good)
-  #this_var <- (1 - dynamic_alpha) * last_running_var + dynamic_alpha * ( last_dev )^2
-
-  # weighted
-  this_var <- (1 - dynamic_alpha) * last_running_var + dynamic_alpha * ( 0.9 * last_dev + 0.1 * this_dev )^2
-
-  #if(this_dev < 0.001 | last_dev  < 0.001)
-  #{
-  #  this_var <- (1 - dynamic_alpha) * last_running_var + dynamic_alpha * ( last_dev )^2
-  #}else{
-  #  # experimental
-  #  extended_dev <- last_dev * exp(-log(this_dev/last_dev) * dt / halflife_mins)
-  #  extended_dev <- max(0.001, extended_dev)
-  #  this_var <- (1 - dynamic_alpha) * last_running_var + dynamic_alpha * ( extended_dev )^2
-  #}
-
-  #if(is.infinite(this_var)) break
-  # z_score determines whether it's a spike or not, >4 or <0.001 is a spike
-  # not strictly a z score, but calculated on a variance calculated from a lagged squared deviance
-  # so it's the deviance from the mean, divided by the standard deviation (sqrt of variance)
-
-  # e.g. for z_score: if deviance / stddev = 4 that's like deviance = 4 * stddev, just neater
-  z_score <- abs( value - running_mean) / max(sqrt(this_var), 0.01)
-  # update z_score each time
-
-  # if z score is outside the thresholds
-  # then don't update the running mean
-  spike <- (z_score > z_threshold[2] | z_score < z_threshold[1] )
-  weight <- ifelse(spike, 0.1, 1)
-
-  running_mean <- (1 - weight) * last_running_mean + weight * running_mean
-  this_var <- (1 - weight) * last_running_var + weight * this_var
-
-  return(data.frame(ts = ts, value = value, mean = running_mean, var = this_var, dev = this_dev, z_score, spike))
-}
-
 ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
-                     time_threshold_days = 2, log = FALSE, invert = FALSE,
+                     time_threshold_days = 2,  prec = 0.0001, log = FALSE, invert = FALSE,
                      last_values = NULL)
 {
-
+  #last_values$ts <- as.POSIXct("2026-06-23 17:00:00")
   # Define the pattern to match variations of "quality"
   pattern <- "(?i)quality"
 
@@ -183,16 +75,18 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
 
   value_column <- names(df)[2]
 
+
   # default values if no last_values input.
   # If no last_values, then re-run from start.
-  if (is.null(last_values)){
+  if (is.null(last_values) || nrow(last_values) == 0){
     last_t <- 0 # last time
     last_running_mean <- df[[value_column]][1] # running mean
     last_dev <- df[[value_column]][1]*0.1 # squared deviance
     last_running_var <- (last_dev)^2 # variance
 
     # defaults for drift
-    last_value <- df[[value_column]][1] # To check if level rising
+    last_ts_value <- sensorMin - 1
+    last_value <- sensorMin - 1 #df[[value_column]][1] # To check if level rising
     last_drift_t <- 0
     last_drift_mean <- df[[value_column]][1]
     cumulative_time <- 0
@@ -203,34 +97,47 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
     last_dev <- last_values$dev # squared deviance
 
     # defaults for drift
+    last_ts_value <- last_values$value # just for checking duplicates
     last_value <- last_values$drift_value
     last_drift_t <- last_values$drift_ts
     last_drift_mean <- last_values$drift_mean
     cumulative_time <- last_values$drift_cumulative_time
 
-    df <- df %>% dplyr::filter(ts > last_t)
-    if( nrow(df) == 0 ) return (NULL) # blank, exit
+    print(df[[posixct_column]])
+    print(last_t)
+    df <- df %>% dplyr::filter(.data[[posixct_column]] > last_t)
+
+    # exit if no new points
+    if( nrow(df) == 0 ) return(NULL)
+
+    #return (
+    #  list(
+    #  last_values = last_values,
+    #  data = df
+    #)) # blank, exit
 
   }
 
   # Apply rules
-  impossible_removed <- df %>% dplyr::filter(.[[2]] <= 0)
+  impossible_removed <- df %>% dplyr::filter(.[[2]] <= -9999)
   below_limits_removed <- df %>% dplyr::filter(.[[2]] < sensorMin)
   above_limits_removed <- df %>% dplyr::filter(.[[2]] > sensorMax)
 
   sp <- tibble::tibble(ts = df[[posixct_column]], value = df[[value_column]])
-  #duplicates_removed <- removeTSDuplicates(sp, sp$value, output = 1)
+  duplicates_removed <- removeTSDuplicates(sp, "value", output = 1, prec = prec,
+                                           last_values = last_values)
 
   ######################################
   ## Clean data before despiking
 
   ## # skip remove Duplicates because the spike detection removes them
-  sp <- sp %>% #removeTSDuplicates(sp, sp$value, output = 0) %>%
+  sp <- sp %>% dplyr::filter(!(ts %in% duplicates_removed$ts)) %>%
     dplyr::filter(value > 0) %>%
     dplyr::filter(value > sensorMin) %>%
     dplyr::filter(value < sensorMax)
 
-  #fullsp <- sp
+  # return NULL if there's no valid data left to despike
+  if( nrow(sp) == 0 ) return(NULL)
 
   if(invert)
   {
@@ -247,7 +154,7 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
   #despike_batch <- list()
   despiked <- list()
   dedrift <- list()
-
+  #drift_detect <- NULL
   #sp <- na.omit(df)
   for(row in 1:nrow(sp))
   {
@@ -255,12 +162,12 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
     spike_detect <- spike_detect_rt(ts = sp$ts[row], value = sp$value[row], last_t,
                                     last_running_mean, last_running_var, last_dev)
 
-    if(!spike_detect$spike){ # only test if drift if not a spike
-      drift_detect <- drift_detect_rt (sp$ts[row], sp$value[row], last_drift_t, last_value,
-                              last_drift_mean, cumulative_time,
-                              threshold_multiplier = 2, time_threshold_days = time_threshold_days,
-                              type = "rising")
+    drift_detect <- drift_detect_rt (sp$ts[row], sp$value[row], last_drift_t, last_value,
+                                     last_drift_mean, cumulative_time,
+                                     threshold_multiplier = 2, time_threshold_days = time_threshold_days,
+                                     type = "rising")
 
+    if(!spike_detect$spike){ # only update if drift if not a spike
       # update recursive inputs
       last_value <- sp$value[row]
       last_drift_t <- sp$ts[row]
@@ -269,7 +176,6 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
 
       # store drift detected
       if(drift_detect$drift)  dedrift[[length(dedrift) + 1]] <- drift_detect
-      #dedrift[[length(dedrift) + 1]] <- drift_detect
     }
 
     # update recursive inputs
@@ -280,7 +186,6 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
 
     # store spike detected
     if(spike_detect$spike)  despiked[[length(despiked) + 1]] <- spike_detect
-    #despiked[[length(despiked) + 1]] <- spike_detect
 
   }
 
@@ -288,14 +193,15 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
   spikesremoved <-  rbindlist(despiked)
   drift_removed <- rbindlist(dedrift)
 
-  # Use `!!sym(q_name)` for dynamic column reference
+  # NA if it's in overwrite
   df <- df %>%
-    mutate(
+    mutate(# Use `!!sym(q_name)` for dynamic column reference
       !!sym(q_name) := ifelse(!is.na(.data[[q_name]]) & !(.data[[q_name]] %in% overwrite),
                               as.character(.data[[q_name]]),
                               NA_character_)
     )
 
+  # add QC column
   df <- df %>%
     mutate(
       !!sym(q_name) := case_when(
@@ -313,31 +219,32 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
   driftpoints <- lead(df[[sym(q_name)]],1) == "sensor_drift" & lag(df[[sym(q_name)]],1) == "sensor_drift"
   df[[sym(q_name)]][driftpoints] <- "sensor_drift"
 
+  # sp becomes too filtered for this to work as is, so just leaving it out
   # Optionally include sp columns in output
   #if (diag) {
   #  df <- bind_cols(df, sp[, -1])  # drop 'ts' column from sp to avoid duplication
   #}
 
+  # if this section ends on a duplicate, store the running number of duplicates
+  last_dupe <- abs(c(last_ts_value, df$Value) - lag(c(last_ts_value, df$Value))) < 0.001
+  rle_last_dupe <- rle(last_dupe)
+  last_dupes <- ifelse(tail(rle_last_dupe$values,1),
+         tail(rle_last_dupe$lengths,1),
+         0)
+
   names(drift_detect) <- paste0("drift_",names(drift_detect))
-  #bind_cols(spike_detect, drift_detect)
 
   list(
-    last_values = bind_cols(spike_detect, drift_detect),
-    data = df
-  )
-
-  #return(df)
-
-  #plot(df$Quality == "spike")
-  #df %>% ggplot(aes(x = ts, y  = Value, colour = Quality)) +
-  #  geom_point()
+    last_values = bind_cols(spike_detect, drift_detect, dupes = last_dupes),
+    data = df)
 
 
 }
 
-
+library(dplyr)
+library(data.table)
+library(ggplot2)
 df <- waterQUAC::TSS_data
-
 
 # Full period of record (slow)
 # Process for comparison
@@ -347,12 +254,10 @@ fulldata <- df %>% ts_anom_rt(overwrite = c(1:4000), sensorMin = 0.001, sensorMa
 fulldata$data %>% ggplot(aes(x = ts, y = Value, colour = Quality)) +
   geom_point()
 
-
 # Process one month of data
 # First Month
 onemonth <- df %>% dplyr::filter(ts < (df$ts[1] + 30*60*60*24)) %>%
   ts_anom_rt(overwrite = c(1:4000), sensorMin = 0.001, sensorMax = 2000, last_values = NULL)
-
 
 # First Month --- Input last_values returned from last run
 print(onemonth$last_values)
@@ -410,15 +315,64 @@ Sys.time() - starttime
 
 new_data_qc
 
+
+#################################
+# EIO real data
+
+varID <- "583fdc80527032fe0c8a69da" # Tinana Height
+
 # and another hour
+eiodata <- eio_hist(APIKEY, varID,
+                    start_time = as.POSIXct("2019-01-01 00:00"))
+
+# It's slow at first, about 30 seconds for almost 10 years of data
+# But it only has to be run once
+
+last_values <- NULL
+#last_values <- last_values %>% dplyr::filter(value < 1)
+
 starttime <- Sys.time()
-new_eio_data <- df %>% dplyr::filter(ts > new_data_qc$last_values$ts & ts < new_data_qc$last_values$ts + 60*60 )
-new_data_qc <- new_eio_data %>%
-  ts_anom_rt(overwrite = c(1:4000), sensorMin = 0.001, sensorMax = 2000, last_values = thirdblock$last_values)
+eiodata_qc <- eiodata %>%
+  ts_anom_rt(overwrite = c(1:4000), sensorMin = 0, sensorMax = 15,
+             last_values = last_values)
 Sys.time() - starttime
 
-new_data_qc
+# plot first run
+eiodata_qc$data %>% ggplot(aes(x = ts, y = Value, colour = Quality)) +
+  geom_point()
 
+# Last values from last run
+# These are all that are required for "memory" of spike detection.
+# Without them it would have to start from the beginning.
+print(eiodata_qc$last_values)
+
+# save qc data to platform and update last_values
+if(!is.null(eiodata_qc))  # function would return NULL if no valid datapoints
+{ # So only update last_values when there is a valid result
+  last_values <- eiodata_qc$last_values
+  # This this last_values would get stored in a delta table
+  # But with extra meta data: site+param name
+}
+
+# download data after last processed data
+eiodata <- eio_hist(APIKEY, varID,
+                    start_time = last_values$ts) #
+
+# retrieve last_values from platform
+starttime <- Sys.time()
+eiodata_qc <- eiodata %>%
+  ts_anom_rt(overwrite = c(1:4000), sensorMin = 0.001, sensorMax = 15,
+             last_values = last_values)
+
+if(!is.null(eiodata_qc)) last_values <- eiodata_qc$last_values
+Sys.time() - starttime
+
+# plot new qc data
+eiodata_qc$data %>% ggplot(aes(x = ts, y = Value, colour = Quality)) +
+  geom_point()
+
+# save data and update last_values
+# etc..
 
 
 
