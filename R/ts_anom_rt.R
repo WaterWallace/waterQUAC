@@ -12,6 +12,11 @@
 #' @param overwrite A vector of quality codes that CAN be overwritten by this function (e.g., manually applied flags that can be updated).
 #' @param sensorMin Minimum valid value as reportable from the sensor.
 #' @param sensorMax Maximum valid value as reportable from the sensor.
+#' @param time_threshold_days Numeric, threshold in days for detecting sensor drift.
+#' @param prec Numeric, similarity of a number to be considered a duplicate.
+#' @param log Logical, if TRUE, apply log transformation to the values before processing.
+#' @param invert Logical, if TRUE, invert the values (useful for certain sensor types).
+#' @param last_values A 'data frame' containing the last processed values for real-time processing. It is a recursive output from this ts_anom_rt() function.
 #'
 #' @return
 #'
@@ -39,7 +44,7 @@
 #' df <- waterQUAC::TSS_data
 #'
 #' # Apply anomaly detection
-#' flagged <- ts_anom2(df = df,
+#' flagged <- ts_anom_rt(df = df,
 #'                    overwrite = 1:4000,
 #'                    sensorMin = 0,
 #'                    sensorMax = 2000)
@@ -72,9 +77,7 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
 
   # Find the column name that is of class "posixct"
   posixct_column <- names(df)[sapply(df, function(x) any(class(x) == "POSIXct"))]
-
   value_column <- names(df)[2]
-
 
   # default values if no last_values input.
   # If no last_values, then re-run from start.
@@ -109,12 +112,6 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
 
     # exit if no new points
     if( nrow(df) == 0 ) return(NULL)
-
-    #return (
-    #  list(
-    #  last_values = last_values,
-    #  data = df
-    #)) # blank, exit
 
   }
 
@@ -162,10 +159,11 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
     spike_detect <- spike_detect_rt(ts = sp$ts[row], value = sp$value[row], last_t,
                                     last_running_mean, last_running_var, last_dev)
 
-    drift_detect <- drift_detect_rt (sp$ts[row], sp$value[row], last_drift_t, last_value,
-                                     last_drift_mean, cumulative_time,
-                                     threshold_multiplier = 2, time_threshold_days = time_threshold_days,
-                                     type = "rising")
+    drift_detect <- drift_detect_rt (ts = sp$ts[row], value = sp$value[row], last_t = last_drift_t, last_value = last_value,
+                                     threshold_multiplier = 2, time_threshold_days = time_threshold_days, halflife = 120,
+                                     type = "rising",
+                                     last_mean = last_drift_mean, cumulative_time = cumulative_time,
+                                     )
 
     if(!spike_detect$spike){ # only update if drift if not a spike
       # update recursive inputs

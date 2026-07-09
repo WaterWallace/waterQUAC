@@ -29,6 +29,7 @@
 #' @importFrom tibble tibble
 #' @importFrom dplyr filter mutate case_when bind_cols
 #' @importFrom rlang sym
+#' @importFrom data.table rbindlist
 #'
 #' @examples
 #' library(dplyr)

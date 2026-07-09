@@ -6,7 +6,7 @@
 #'
 #' @param key This is required for all functions and can be generated from the account settings in WQI's Eagle.IO instance
 #' @param node_id A node ID of a given parameter in eagle.IO, noting historic will only work with nodes that contain historic data (ie level/N-NO3/Turbidity).
-#' @param start_time DateTime to start the historic period of capture. Format needs to be in ISO8601, see: 2014-10-09T22:38:10Z || 2014-10-09T22:38:10.000Z || 2014-10-09T20:38:10+0200 || 2014-10-09T20:38:10+02:00
+#' @param start_time DateTime to start the historic period of capture. Format needs to POSIXCt or in ISO8601. If it is POSIXCt it will be converted to correctly to UTC. If it is ISO8601 it will be used as is and will be treated as already in UTC.
 #' @param end_time DateTime to end the historic period of capture. Defaults to the current system time + one day. Format needs to be in ISO8601, see: 2014-10-09T22:38:10Z || 2014-10-09T22:38:10.000Z || 2014-10-09T20:38:10+0200 || 2014-10-09T20:38:10+02:00
 #' @return tibble containing returned historic data, value and quality. Time as "Australia/Brisbane"
 #'
@@ -25,7 +25,7 @@
 eio_hist <- function(key, node_id, start_time = NULL, end_time = Sys.time()) {
   #param -- MUST be a node ID corresponding to a historic data source (ie level/N-NO3/Turbidity)
 
-  if(is.null(start_time)) start_time <- as.POSIXct("2010-01-01 00:00")
+  if(is.null(start_time)) start_time <- Sys.time() - 30 * 24 * 60 * 60
   if(inherits(start_time, "POSIXct")) attr(start_time, "tzone") <- "UTC"
   if(inherits(end_time, "POSIXct")) attr(end_time, "tzone") <- "UTC"
 
@@ -39,6 +39,7 @@ eio_hist <- function(key, node_id, start_time = NULL, end_time = Sys.time()) {
                        httr::add_headers('X-Api-Key' = key,
                                    'Content-Type' = "application/json"))
   Node_content=jsonlite::fromJSON(rawToChar(APIData$content))
+  Node_content$header
 
   Data<- tibble::tibble(ts = Node_content[["data"]][["ts"]])
   Data$ts<-as.POSIXct(Data$ts, format="%Y-%m-%dT%H:%M:%S", tz = "UTC")

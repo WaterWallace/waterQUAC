@@ -5,27 +5,21 @@
 #' defined as a multiple of the median value, and drift is flagged if readings exceed
 #' this threshold continuously for longer than a specified number of days.
 #'
-#' If a column matching "quality" (case-insensitive) exists in the data, drift flags
-#' will be written to it. Otherwise, a new column `quality` is created.
+#' Depending on the value of "type", the function will accumulate either rising or falling points, or both.
 #'
-#' @param data A data frame containing time series data.
-#' @param value_col A string. The name of the column containing numeric sensor values.
-#' @param time_col A string. The name of the column containing POSIXct timestamps.
-#' @param threshold_multiplier A numeric multiplier applied to the median value to define the drift threshold. Default is 2.
-#' @param time_threshold_days Minimum number of **continuous** days above the threshold required to flag sensor drift. Default is 5 days.
+#' @param ts POSIXCt This is the timestamp of the current observation.
+#' @param value Numeric This is the sensor value of the current observation.
+#' @param last_t POSIXCt This is the timestamp of the last observation.
+#' @param last_value Numeric This is the sensor value of the last observation.
+#' @param threshold_multiplier A numeric multiplier applied to the moving average value to define the drift threshold. Default is 1.1.
+#' @param time_threshold_days Minimum number of **continuous** days above the threshold required to flag sensor drift. Default is 2 days.
+#' @param halflife Numeric The halflife (in days) for the exponential decay used in calculating the dynamic mean. Default is 120 days.
+#' @param type A string indicating the type of drift to detect: "rising", "falling", or NULL for both. Default is NULL.
+#' @param last_mean Numeric The mean value from the previous observation, used for dynamic threshold
+#' @param cumulative_time Numeric The cumulative time (in days) above the threshold from the previous observation.
 #'
 #' @return A data frame with all original columns, a new column `cumulative_time_above_threshold`
 #'         (in days), and an updated or added `Quality` column with `"sensor_drift"` flags.
-#'
-#' @note The input data frame (`data`) must include:
-#'
-#' | Column Name | Type      | Description                                       |
-#' |-------------|-----------|---------------------------------------------------|
-#' | `<time_col>` | POSIXct   | Timestamp of each observation                     |
-#' | `<value_col>`| numeric   | Measured sensor value                             |
-#' | `Quality`   | character | Optional; if present, will be used/updated        |
-#'
-#' All other columns in the input data frame will be preserved in the output.
 #'
 #' @examples
 #' library(dplyr)
@@ -51,13 +45,13 @@
 #'
 #' @export
 drift_detect_rt <- function(ts, value, last_t, last_value,
-                            last_mean = NULL, cumulative_time = NULL,
                             threshold_multiplier = 1.1, time_threshold_days = 2, halflife = 120,
-                            type = NULL)
+                            type = NULL,
+                            last_mean = NULL, cumulative_time = NULL)
 {
 
-
   if(is.null(last_mean))  last_mean <- value
+  if(is.null(cumulative_time))  cumulative_time <- value
 
   # exponentional decay
   dt <- difftime(ts, last_t, units = "days") %>% as.numeric # change in time
