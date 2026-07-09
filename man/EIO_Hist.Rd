@@ -7,19 +7,14 @@
 \url{https://wqi.eagle.io/}
 }
 \usage{
-eio_hist(
-  key,
-  node_id,
-  start_time,
-  end_time = format(Sys.time() + 86400, "\%Y-\%m-\%dT\%H:\%M:\%SZ")
-)
+eio_hist(key, node_id, start_time = NULL, end_time = Sys.time())
 }
 \arguments{
 \item{key}{This is required for all functions and can be generated from the account settings in WQI's Eagle.IO instance}
 
 \item{node_id}{A node ID of a given parameter in eagle.IO, noting historic will only work with nodes that contain historic data (ie level/N-NO3/Turbidity).}
 
-\item{start_time}{DateTime to start the historic period of capture. Format needs to be in ISO8601, see: 2014-10-09T22:38:10Z || 2014-10-09T22:38:10.000Z || 2014-10-09T20:38:10+0200 || 2014-10-09T20:38:10+02:00}
+\item{start_time}{DateTime to start the historic period of capture. Format needs to POSIXCt or in ISO8601. If it is POSIXCt it will be converted to correctly to UTC. If it is ISO8601 it will be used as is and will be treated as already in UTC.}
 
 \item{end_time}{DateTime to end the historic period of capture. Defaults to the current system time + one day. Format needs to be in ISO8601, see: 2014-10-09T22:38:10Z || 2014-10-09T22:38:10.000Z || 2014-10-09T20:38:10+0200 || 2014-10-09T20:38:10+02:00}
 }

@@ -89,10 +89,10 @@
 #'       color = ~spike,
 #'       marker = list(size = 8)
 #'     ) %>%
-#'     plotly::add_lines(x = ~ts, y = ~upper, name = "Upper Threshold", line = list(color = 'grey', dash = 'dot')) %>%
-#'     plotly::add_lines(x = ~ts, y = ~lower, name = "Lower Threshold", line = list(color = 'grey', dash = 'dot'))
-#'
-#'
+#'     plotly::add_lines(x = ~ts, y = ~upper, name = "Upper Threshold",
+#'       line = list(color = 'grey', dash = 'dot')) %>%
+#'     plotly::add_lines(x = ~ts, y = ~lower, name = "Lower Threshold",
+#'       line = list(color = 'grey', dash = 'dot'))
 #' @export
 spike_detect_rt <- function(ts,
                             value,

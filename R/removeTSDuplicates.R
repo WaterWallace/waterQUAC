@@ -23,20 +23,21 @@
 #' @importFrom tibble tibble
 #' @importFrom dplyr mutate case_when bind_cols
 #' @importFrom rlang sym
-#' @importFrom data.table rleid
+#' @importFrom data.table rleid rbindlist
 #'
 #' @examples
 #' #' # Example usage of removeTSDuplicates
 #' # Create a sample time series data frame
 #' sample_data <- data.frame(
-#'  ts = as.POSIXct(c('2024-01-01 00:00', '2024-01-01 00:01', '2024-01-01 00:02', '2024-01-01 00:03', '2024-01-01 00:04')),
+#'  ts = as.POSIXct(c('2024-01-01 00:00', '2024-01-01 00:01', '2024-01-01 00:02',
+#'   '2024-01-01 00:03', '2024-01-01 00:04')),
 #'  Value = c(1.0, 2.0, 2.0, 3.0, 4.0)
 #'  )
 #'  print(sample_data)
 #'  # Call the function to remove duplicates
-#'  cleaned_data <- removeTSDuplicates(sample_data, value_column = "Value", maxdupes = 2, prec = 0.0001, output = 0)
+#'  cleaned_data <- removeTSDuplicates(sample_data, value_column = "Value", maxdupes = 2,
+#'  prec = 0.0001, output = 0)
 #'  print(cleaned_data)
-#'
 #'
 #' @export
 removeTSDuplicates <- function(originalTS, value_column, maxdupes = 3, prec = 0.0001, output=0,

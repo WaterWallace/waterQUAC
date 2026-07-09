@@ -12,7 +12,6 @@ ts_anom(
   window = 10,
   prec = 1e-04,
   diag = FALSE,
-  output = 0,
   rep_width = 10,
   med_width = 11,
   sd_width = 22
@@ -32,6 +31,12 @@ ts_anom(
 \item{prec}{The precision threshold (standard deviation in the same units as input data. ie. set to 0 for absolute repetitive values, otherwise a small value to allow for some standard deviation in the window) to detect repeated values (flatlines). Values less than `prec` across the window are considered repeating.}
 
 \item{diag}{Logical; if `TRUE`, diagnostic columns used in detection (e.g., rolling SD and median) will be appended to the output.}
+
+\item{rep_width}{Integer Length of duplicate detection}
+
+\item{med_width}{Integer Length of median window}
+
+\item{sd_width}{Integer Length of standard deviatino window}
 }
 \value{
 A data frame with the original data and an updated or newly created "Quality" column with anomaly classifications: 'impossible', 'below_limits', 'above_limits', 'repeating_value', 'spike', or 'OK' where no QC flags have been triggered.

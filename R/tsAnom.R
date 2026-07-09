@@ -15,7 +15,9 @@
 #' @param window Approximate number of hours to define a rolling window size for flatline and spike detection.
 #' @param prec The precision threshold (standard deviation in the same units as input data. ie. set to 0 for absolute repetitive values, otherwise a small value to allow for some standard deviation in the window) to detect repeated values (flatlines). Values less than `prec` across the window are considered repeating.
 #' @param diag Logical; if `TRUE`, diagnostic columns used in detection (e.g., rolling SD and median) will be appended to the output.
-#'
+#' @param rep_width Integer Length of duplicate detection
+#' @param med_width Integer Length of median window
+#' @param sd_width Integer Length of standard deviatino window
 #' @return A data frame with the original data and an updated or newly created "Quality" column with anomaly classifications: 'impossible', 'below_limits', 'above_limits', 'repeating_value', 'spike', or 'OK' where no QC flags have been triggered.
 #'
 #' @note The input data frame (`df`) must include the following columns:
@@ -60,7 +62,7 @@
 #'
 #' @export
 
-ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0001, diag = FALSE, output=0,
+ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0001, diag = FALSE,
                     rep_width = 10,
                     med_width = 11,
                     sd_width = 22) {

@@ -18,7 +18,40 @@
 #' @param invert Logical, if TRUE, invert the values (useful for certain sensor types).
 #' @param last_values A 'data frame' containing the last processed values for real-time processing. It is a recursive output from this ts_anom_rt() function.
 #'
-#' @return
+
+#' @return A named list containing:
+#' \describe{
+#'   \item{last_values}{A single-row data frame summarising the most recent
+#'   observation and drift state. Columns include:
+#'   \describe{
+#'     \item{ts}{Timestamp of the latest observation.}
+#'     \item{value}{Latest observed value.}
+#'     \item{mean}{Rolling mean at the latest observation.}
+#'     \item{var}{Rolling variance at the latest observation.}
+#'     \item{dev}{Deviation from the rolling mean.}
+#'     \item{z_score}{Calculated z-score for the observation.}
+#'     \item{spike}{Logical indicating whether the latest observation was
+#'     classified as a spike.}
+#'     \item{drift_ts}{Timestamp of the most recent drift event.}
+#'     \item{drift_value}{Value associated with the most recent drift event.}
+#'     \item{drift_cumulative_time}{Accumulated duration of the current drift
+#'     period.}
+#'     \item{drift_mean}{Mean value associated with the current drift state.}
+#'     \item{drift_drift}{Logical indicating whether the latest observation
+#'     was classified as drift.}
+#'     \item{dupes}{Number of duplicate observations detected.}
+#'   }}
+#'
+#'   \item{data}{A data frame (or tibble) containing the input time series with
+#'   quality flags applied. Includes:
+#'   \describe{
+#'     \item{ts}{Observation timestamp.}
+#'     \item{Value}{Observed value.}
+#'     \item{Quality}{Quality classification for each observation (e.g. "OK",
+#'     "spike", or other flag values).}
+#'   }}
+#' }
+
 #'
 #' @note The input data frame (`df`) must include the following columns:
 #'
@@ -39,6 +72,7 @@
 #' library(dplyr)
 #' library(zoo)
 #' library(plotly)
+#' library(data.table)
 #'
 #' #example Total Suspended Solids dataframe
 #' df <- waterQUAC::TSS_data
@@ -50,7 +84,7 @@
 #'                    sensorMax = 2000)
 #'
 #' # Plot flagged results
-#'   plotly::plot_ly(data = flagged) |>
+#'   plotly::plot_ly(data = flagged$data) |>
 #'     plotly::add_markers(
 #'       x = ~ts,
 #'       y = ~Value,
@@ -162,8 +196,9 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
     drift_detect <- drift_detect_rt (ts = sp$ts[row], value = sp$value[row], last_t = last_drift_t, last_value = last_value,
                                      threshold_multiplier = 2, time_threshold_days = time_threshold_days, halflife = 120,
                                      type = "rising",
-                                     last_mean = last_drift_mean, cumulative_time = cumulative_time,
+                                     last_mean = last_drift_mean, cumulative_time = cumulative_time
                                      )
+
 
     if(!spike_detect$spike){ # only update if drift if not a spike
       # update recursive inputs
@@ -238,151 +273,6 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
 
 
 }
-
-library(dplyr)
-library(data.table)
-library(ggplot2)
-df <- waterQUAC::TSS_data
-
-# Full period of record (slow)
-# Process for comparison
-fulldata <- df %>% ts_anom_rt(overwrite = c(1:4000), sensorMin = 0.001, sensorMax = 2000, last_values = NULL)
-
-# plot spikes/drift removed
-fulldata$data %>% ggplot(aes(x = ts, y = Value, colour = Quality)) +
-  geom_point()
-
-# Process one month of data
-# First Month
-onemonth <- df %>% dplyr::filter(ts < (df$ts[1] + 30*60*60*24)) %>%
-  ts_anom_rt(overwrite = c(1:4000), sensorMin = 0.001, sensorMax = 2000, last_values = NULL)
-
-# First Month --- Input last_values returned from last run
-print(onemonth$last_values)
-
-# Now process the next month
-secondmonth <- df %>% dplyr::filter(ts > onemonth$last_values$ts) %>% # don't really have to chop this, ts_anom_rt takes care of it
-  dplyr::filter(ts < (df$ts[1] + 60*60*60*24)) %>%
-  ts_anom_rt(overwrite = c(1:4000), sensorMin = 0.001, sensorMax = 2000,
-             last_values = onemonth$last_values) # last_values was returned from the last run
-
-
-# join second month onto the full series data
-result <- fulldata$data %>%
-  left_join(secondmonth$data %>% select(ts, Quality), by = "ts") %>% na.omit
-
-# confirming all points the same
-# sum of zero means there's no difference
-sum(result$Quality.x != result$Quality.y)
-
-# Second month --- Input last_values returned from last run
-print(secondmonth$last_values)
-
-# doing 10 months of data so slower
-thirdblock <- df %>% dplyr::filter(ts > secondmonth$last_values$ts) %>% # don't really have to chop this, ts_anom_rt takes care of it
-  dplyr::filter(ts < (df$ts[1] + 365*60*60*24)) %>%
-  ts_anom_rt(overwrite = c(1:4000), sensorMin = 0.001, sensorMax = 2000,
-  last_values = secondmonth$last_values)
-
-# plot spikes/drift removed
-thirdblock$data %>% ggplot(aes(x = ts, y = Value, colour = Quality)) +
-  geom_point()
-
-# join 3rd block onto the full series data
-result <- fulldata$data %>%
-  left_join(thirdblock$data %>% select(ts, Quality), by = "ts") %>% na.omit
-
-# confirming all points the same
-# sum of zero means there's no difference
-sum(result$Quality.x != result$Quality.y)
-
-# but it's really just for adding an hour of data per time
-df %>% dplyr::filter(ts > thirdblock$last_values$ts)
-
-# new data from eagle.io
-new_eio_data <- df %>% dplyr::filter(ts > thirdblock$last_values$ts & ts < thirdblock$last_values$ts + 60*60 )
-
-# last hour only 3 data points
-print(new_eio_data)
-
-# Very fast
-starttime <- Sys.time()
-new_data_qc <- new_eio_data %>%
- ts_anom_rt(overwrite = c(1:4000), sensorMin = 0.001, sensorMax = 2000, last_values = thirdblock$last_values)
-Sys.time() - starttime
-
-new_data_qc
-
-
-#################################
-# EIO real data
-
-varID <- "583fdc80527032fe0c8a69da" # Tinana Height
-
-# and another hour
-eiodata <- eio_hist(APIKEY, varID,
-                    start_time = as.POSIXct("2019-01-01 00:00"))
-
-# It's slow at first, about 30 seconds for almost 10 years of data
-# But it only has to be run once
-
-last_values <- NULL
-#last_values <- last_values %>% dplyr::filter(value < 1)
-
-starttime <- Sys.time()
-eiodata_qc <- eiodata %>%
-  ts_anom_rt(overwrite = c(1:4000), sensorMin = 0, sensorMax = 15,
-             last_values = last_values)
-Sys.time() - starttime
-
-# plot first run
-eiodata_qc$data %>% ggplot(aes(x = ts, y = Value, colour = Quality)) +
-  geom_point()
-
-# Last values from last run
-# These are all that are required for "memory" of spike detection.
-# Without them it would have to start from the beginning.
-print(eiodata_qc$last_values)
-
-# save qc data to platform and update last_values
-if(!is.null(eiodata_qc))  # function would return NULL if no valid datapoints
-{ # So only update last_values when there is a valid result
-  last_values <- eiodata_qc$last_values
-  # This this last_values would get stored in a delta table
-  # But with extra meta data: site+param name
-}
-
-# download data after last processed data
-eiodata <- eio_hist(APIKEY, varID,
-                    start_time = last_values$ts) #
-
-# retrieve last_values from platform
-starttime <- Sys.time()
-eiodata_qc <- eiodata %>%
-  ts_anom_rt(overwrite = c(1:4000), sensorMin = 0.001, sensorMax = 15,
-             last_values = last_values)
-
-if(!is.null(eiodata_qc)) last_values <- eiodata_qc$last_values
-Sys.time() - starttime
-
-# plot new qc data
-eiodata_qc$data %>% ggplot(aes(x = ts, y = Value, colour = Quality)) +
-  geom_point()
-
-# save data and update last_values
-# etc..
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

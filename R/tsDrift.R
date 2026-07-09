@@ -10,10 +10,10 @@
 #'
 #' @param data A data frame containing time series data.
 #' @param value_col A string. The name of the column containing numeric sensor values.
-#' @param time_col A string. The name of the column containing POSIXct timestamps.
 #' @param threshold_multiplier A numeric multiplier applied to the median value to define the drift threshold. Default is 2.
 #' @param time_threshold_days Minimum number of **continuous** days above the threshold required to flag sensor drift. Default is 5 days.
-#' @param type
+#' @param overwrite A vector of quality codes to overwrite
+#' @param type A string. Either "rising", "falling", or NULL
 #'
 #' @return A data frame with all original columns, a new column `cumulative_time_above_threshold`
 #'         (in days), and an updated or added `Quality` column with `"sensor_drift"` flags.
