@@ -81,6 +81,16 @@
 #' mutate(lower = mean - 4* pmax(sqrt(var),0.01))
 #'
 #' head(spike_results)
+#' spike_results %>% dplyr::select(-c(var, dev, z_score, mean)) %>%
+#'   ggplot(.) +
+#'   geom_point(aes(x=ts, y=value, colour = spike, shape = spike)) +
+#'   geom_line(aes(x=ts, y=upper), colour = "grey", linetype = "dashed") +
+#'   geom_line(aes(x=ts, y=lower), colour = "grey", linetype = "dashed")
+#'
+#'
+#'
+#'
+#' \dontrun{
 #' # Plot flagged results
 #'   plotly::plot_ly(data = spike_results) |>
 #'     plotly::add_markers(
@@ -93,6 +103,7 @@
 #'       line = list(color = 'grey', dash = 'dot')) %>%
 #'     plotly::add_lines(x = ~ts, y = ~lower, name = "Lower Threshold",
 #'       line = list(color = 'grey', dash = 'dot'))
+#'  }
 #' @export
 spike_detect_rt <- function(ts,
                             value,

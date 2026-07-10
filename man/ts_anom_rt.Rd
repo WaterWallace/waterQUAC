@@ -106,6 +106,11 @@ flagged <- ts_anom_rt(df = df,
                    sensorMin = 0,
                    sensorMax = 2000)
 
+flagged$data \%>\%
+  ggplot(aes(x=ts, y=Value, colour = Quality, shape = Quality)) +
+  geom_point()
+
+\dontrun{
 # Plot flagged results
   plotly::plot_ly(data = flagged$data) |>
     plotly::add_markers(
@@ -114,6 +119,6 @@ flagged <- ts_anom_rt(df = df,
       color = ~Quality,
       marker = list(size = 8)
     )
-
+}
 
 }

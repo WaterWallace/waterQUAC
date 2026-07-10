@@ -18,29 +18,56 @@
 #' @param last_mean Numeric The mean value from the previous observation, used for dynamic threshold
 #' @param cumulative_time Numeric The cumulative time (in days) above the threshold from the previous observation.
 #'
-#' @return A data frame with all original columns, a new column `cumulative_time_above_threshold`
-#'         (in days), and an updated or added `Quality` column with `"sensor_drift"` flags.
+#' @return A data frame with the input time and value, plus recursive parameters to feed back into the function
+#' \describe{
+#' \item{ts}{Timestamp of the observation}
+#' \item{value}{Observed value}
+#' \item{cumulative_time}{Cumulative time above threshold}
+#' \item{mean}{Updated running exponential time weighted mean}
+#' \item{drift}{Logical stating whether or not the point is drift}
+#' \item{z_score}{Z-score of the current observation based on the running mean
+#' and variance}
+#' \item{spike}{Logical indicator of whether the current observation is classified as a spike (TRUE) or not (FALSE) based on the z-score thresholds}
+#' }
 #'
 #' @examples
 #' library(dplyr)
+#' library(data.table)
 #' # Simulated data
 #' set.seed(42)
 #' ts <- seq.POSIXt(from = as.POSIXct("2024-01-01"), by = "hour", length.out = 200)
 #' val <- c(rnorm(150, mean = 2), rep(6, 50))  # final 50 points simulate drift
 #' df <- data.frame(ts = ts, Value = val, Quality = NA_character_)
 #'
-#' # Apply drift detection
-#' result <- detect_sensor_drift(df, value_col = "Value")
+#' drift_results <- list()
+#' for(i in 1:nrow(df)){
+#'   if (i == 1) {
+#'     drift_df <- drift_detect_rt(ts = df[i,]$ts, value = df[i,]$Value,
+#'       last_t = 0, last_value = 0)
+#'   }else{
+#'     drift_df <- drift_detect_rt(ts= df[i,]$ts, value = df[i,]$Value,
+#'       last_t = drift_df$ts, last_value = drift_df$value,
+#'       last_mean = drift_df$mean, cumulative_time = drift_df$cumulative_time
+#'       )
+#'   }
+#'   drift_results[[length(drift_results) + 1]] <- drift_df
+#' }
+#' drift_results <- rbindlist(drift_results)
 #'
+#' drift_results %>% ggplot(aes(x = ts, y = value, colour = drift)) +
+#' geom_point()
+#'
+#' \dontrun{
 #' # Visualize
-#' if (requireNamespace("plotly", quietly = TRUE)) {
-#'   plotly::plot_ly(result) |>
+#' if (interactive() && requireNamespace("plotly", quietly = TRUE)) {
+#'   plotly::plot_ly(drift_results) |>
 #'     plotly::add_markers(
 #'       x = ~ts,
-#'       y = ~Value,
+#'       y = ~value,
 #'       type = "scatter",
-#'       color = ~Quality
+#'       color = ~drift
 #'     )
+#' }
 #' }
 #'
 #' @export
@@ -65,13 +92,13 @@ drift_detect_rt <- function(ts, value, last_t, last_value,
   if(value > threshold)
   {
     dt <- min(1, dt) # prevent long gaps instantly being drift
-    if(type == "rising")
+    if(is.null(type))
     {
-      if ( value > last_value ){
+      cumulative_time <- cumulative_time + dt # cumulative time in days
+    }else{
+      if ((type == "rising" & value > last_value) | (type == "falling" & value < last_value )){
         cumulative_time <- cumulative_time + dt # cumulative time in days
       }
-    }else{
-      cumulative_time <- cumulative_time + dt # cumulative time in days
     }
   }else{
     cumulative_time <- 0

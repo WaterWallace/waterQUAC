@@ -83,6 +83,11 @@
 #'                    sensorMin = 0,
 #'                    sensorMax = 2000)
 #'
+#' flagged$data %>%
+#'   ggplot(aes(x=ts, y=Value, colour = Quality, shape = Quality)) +
+#'   geom_point()
+#'
+#' \dontrun{
 #' # Plot flagged results
 #'   plotly::plot_ly(data = flagged$data) |>
 #'     plotly::add_markers(
@@ -91,7 +96,7 @@
 #'       color = ~Quality,
 #'       marker = list(size = 8)
 #'     )
-#'
+#' }
 #'
 #' @export
 ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
@@ -150,8 +155,8 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
   }
 
   # Apply rules
-  impossible_removed <- df %>% dplyr::filter(.[[2]] <= -9999)
-  below_limits_removed <- df %>% dplyr::filter(.[[2]] < sensorMin)
+  impossible_removed <- df %>% dplyr::filter(.[[2]] <= -99) # this is kind of redundant
+  below_limits_removed <- df %>% dplyr::filter(.[[2]] <= sensorMin)
   above_limits_removed <- df %>% dplyr::filter(.[[2]] > sensorMax)
 
   sp <- tibble::tibble(ts = df[[posixct_column]], value = df[[value_column]])
