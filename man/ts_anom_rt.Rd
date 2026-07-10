@@ -96,6 +96,7 @@ library(dplyr)
 library(zoo)
 library(plotly)
 library(data.table)
+library(ggplot2)
 
 #example Total Suspended Solids dataframe
 df <- waterQUAC::TSS_data

@@ -54,7 +54,7 @@ and variance}
 \description{
 This function detects sustained periods where sensor readings remain consistently
 above a calculated threshold, which may indicate sensor drift. The threshold is
-defined as a multiple of the median value, and drift is flagged if readings exceed
+defined as a multiple of the running mean, and drift is flagged if readings exceed
 this threshold continuously for longer than a specified number of days.
 }
 \details{
@@ -63,6 +63,7 @@ Depending on the value of "type", the function will accumulate either rising or 
 \examples{
 library(dplyr)
 library(data.table)
+library(ggplot2)
 # Simulated data
 set.seed(42)
 ts <- seq.POSIXt(from = as.POSIXct("2024-01-01"), by = "hour", length.out = 200)

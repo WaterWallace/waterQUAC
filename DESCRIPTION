@@ -21,5 +21,6 @@ Imports:
     httr,
     plotly,
     zoo,
-    data.table
+    data.table,
+    ggplot2
 Config/roxygen2/version: 8.0.0
