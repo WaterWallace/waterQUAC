@@ -15,7 +15,9 @@
 #' @param window Approximate number of hours to define a rolling window size for flatline and spike detection.
 #' @param prec The precision threshold (standard deviation in the same units as input data. ie. set to 0 for absolute repetitive values, otherwise a small value to allow for some standard deviation in the window) to detect repeated values (flatlines). Values less than `prec` across the window are considered repeating.
 #' @param diag Logical; if `TRUE`, diagnostic columns used in detection (e.g., rolling SD and median) will be appended to the output.
-#'
+#' @param rep_width Integer Length of duplicate detection
+#' @param med_width Integer Length of median window
+#' @param sd_width Integer Length of standard deviatino window
 #' @return A data frame with the original data and an updated or newly created "Quality" column with anomaly classifications: 'impossible', 'below_limits', 'above_limits', 'repeating_value', 'spike', or 'OK' where no QC flags have been triggered.
 #'
 #' @note The input data frame (`df`) must include the following columns:
@@ -59,8 +61,11 @@
 #'     )
 #'
 #' @export
-#'
-ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0001, diag = FALSE, output=0) {
+
+ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0001, diag = FALSE,
+                    rep_width = 10,
+                    med_width = 11,
+                    sd_width = 22) {
 
 
   # Define the pattern to match variations of "quality"
@@ -85,39 +90,69 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
   time_diff <- diff(sp[["ts"]])
 
   # Calculate the average data logging interval per day and reduce it to match the defined window. interval = points per window
-  interval <- round(((1440 / as.numeric(mean(time_diff), units = "mins")) / 24) * window)
-
-
-  #median(time_diff)
+  #interval <- round(((1440 / as.numeric(mean(time_diff), units = "mins")) / 24) * window)
+  interval <- round(window / as.numeric(mean(time_diff), units = "hours"))
 
 
   #Flatline detection
-  sp$centerSD <- zoo::rollapply(df[,2], width = interval, FUN = sd, fill = TRUE, align = 'center', na.rm = TRUE)   # a rolling window of Standard Deviation in parameter values - CENTERED -- rep_width determines the window width for all of these options
-  sp$leftSD <-   zoo::rollapply(df[,2], width = interval, FUN = sd, fill = TRUE, align = 'left', na.rm = TRUE)     # a rolling window of Standard Deviation in parameter values - LEFT -- rep_width determines the window width for all of these options
-  sp$rightSD <-  zoo::rollapply(df[,2], width = interval, FUN = sd, fill = TRUE, align = 'right', na.rm = TRUE)    # a rolling window of Standard Deviation in parameter values - RIGHT -- rep_width determines the window width for all of these options
+  sp$centerSD <- zoo::rollapply(df[,2], width = rep_width, FUN = sd, fill = TRUE, align = 'center', na.rm = TRUE)   # a rolling window of Standard Deviation in parameter values - CENTERED -- rep_width determines the window width for all of these options
+  sp$leftSD <-   zoo::rollapply(df[,2], width = rep_width, FUN = sd, fill = TRUE, align = 'left', na.rm = TRUE)     # a rolling window of Standard Deviation in parameter values - LEFT -- rep_width determines the window width for all of these options
+  sp$rightSD <-  zoo::rollapply(df[,2], width = rep_width, FUN = sd, fill = TRUE, align = 'right', na.rm = TRUE)    # a rolling window of Standard Deviation in parameter values - RIGHT -- rep_width determines the window width for all of these options
 
 
   #Spike detection
-  sp$median <- zoo::rollapply(suppressWarnings(df[,2]), width = interval, FUN = median,  partial = TRUE, na.rm = TRUE, align = 'center')   # rolling median of the log(value) for given width - med_width - centered
-  sp$sd <-     zoo::rollapply(suppressWarnings(df[,2]), width = interval, FUN = sd, na.rm=TRUE, partial = TRUE, align = 'center')            # rolling standard deviation of the median log(value) as calculated above for a larger window - centered
+  #sp$value <- df$Value
+  sp$median <- zoo::rollapply(suppressWarnings(df[,2]), width = med_width, FUN = median,  partial = TRUE, na.rm = TRUE, align = 'center')   # rolling median of the log(value) for given width - med_width - centered
+  sp$sd <-     zoo::rollapply(suppressWarnings(df[,2]), width = sd_width, FUN = sd, na.rm=TRUE, partial = TRUE, align = 'center')            # rolling standard deviation of the median log(value) as calculated above for a larger window - centered
+
+  #sp$value <- df$Value
+  #plot(sp$ts, df$Value)
+  #sp[(df[[2]] - sp$median) > (4 * sp$sd),]
+  #sp$spike <- abs(df[[2]] - sp$median) > (4 * sp$sd)
+  #sum(sp$spike)
+
+  #plot(df$ts, 4*sp$sd, type="l")
+  #points(df$ts, abs(df[[2]] - sp$median))
+  #legend(
+  #  "topright",
+  #  legend = c("4 × SD", "|value − median|", "Spike"),
+  #  lty    = c(1, NA, NA),   # line for first, points for others
+  #  pch    = c(NA, 1, 1),
+  #  col    = c("black", "black", "red"),
+  #  bty    = "n"
+  #)
+
+  #sp$
+
+  df <- df %>%
+    mutate(
+      !!sym(q_name) := ifelse(!is.na(.data[[q_name]]) & !(.data[[q_name]] %in% overwrite),
+                              as.character(.data[[q_name]]),
+                              NA_character_)
+    )
+
 
   # Use `!!sym(q_name)` for dynamic column reference
   df <- df %>%
     mutate(
       !!sym(q_name) := case_when(
-        !is.na(.data[[q_name]]) & !(.data[[q_name]] %in% overwrite) ~ as.character(.data[[q_name]]),
         df[[2]] < 0 ~ 'impossible',
         df[[2]] < sensorMin ~ 'below_limits',
         df[[2]] > sensorMax ~ 'above_limits',
-        sp$centerSD < prec ~ 'repeating_value',
-        sp$leftSD < prec ~ 'repeating_value',
-        sp$rightSD < prec ~ 'repeating_value',
-        abs(suppressWarnings(df[[2]] - sp$median)) > (4 * sp$sd) ~ 'spike',
+        sp$centerSD[,1] < prec ~ 'repeating_value',
+        sp$leftSD[,1] < prec ~ 'repeating_value',
+        sp$rightSD[,1] < prec ~ 'repeating_value',
+        abs(suppressWarnings(df[[2]] - sp$median[,1])) > (4 * sp$sd[,1]) ~ 'spike',
         TRUE ~ 'OK'
       )
     )
 
-  #unique(df$Quality)
+
+
+
+  str(sp$centerSD)
+  length(sp$centerSD)
+  dim(sp$centerSD)
 
   # Optionally include sp columns in output
   if (diag) {
@@ -125,4 +160,8 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
   }
 
   return(df)
+
+  df %>% ggplot(aes(x=ts, y=Value, colour=Quality)) +
+    geom_point()
+
 }

@@ -35,6 +35,8 @@ wmip_hist(
 \item{interval}{String year, month, day, hour, minute, second}
 
 \item{report}{String start or end}
+
+\item{multiplier}{Numeric Multiplies value by this}
 }
 \value{
 A data frame containing extracted WMIP data for specified gauging station/parameter.

@@ -6,22 +6,25 @@
 \usage{
 removeTSDuplicates(
   originalTS,
-  diffColumn,
+  value_column,
   maxdupes = 3,
   prec = 1e-04,
-  output = 0
+  output = 0,
+  last_values = NULL
 )
 }
 \arguments{
-\item{originalTS}{A data frame containing time series data. It must have a timestamp column of class `POSIXct` and a numeric value column (assumed to be the second column).}
+\item{originalTS}{A data frame containing time series data. It must have a timestamp column of class `POSIXct` and a numeric value column.}
 
-\item{diffColumn}{A vector of quality codes that CAN be overwritten by this function (e.g., manually applied flags that can be updated).}
+\item{value_column}{Character, name of the column containing the values to check for duplicates}
 
-\item{maxdupes}{Numeric, Number of duplicates to flag as repeating value}
+\item{maxdupes}{Numeric, Number of duplicates needed to flag as repeating value}
 
 \item{prec}{Numeric, similarity of a number to be a duplicate}
 
 \item{output}{Integer, 0 (output the clean data) or 1 (output the duplicates)}
+
+\item{last_values}{A data frame containing the last values from the previous time series, used for continuity. It should have columns `value` and `dupes`.}
 }
 \value{
 A dataframe with duplicates values removed
@@ -38,5 +41,19 @@ The input data frame (`df`) must include the following columns:
 | `Value`     | numeric   | Measured value from the sensor                            |
 
 All other columns in the input data frame will be preserved in the output.
-If `diag = TRUE`, additional diagnostic columns (e.g., rolling SD, median) will be appended.
+}
+\examples{
+#' # Example usage of removeTSDuplicates
+# Create a sample time series data frame
+sample_data <- data.frame(
+ ts = as.POSIXct(c('2024-01-01 00:00', '2024-01-01 00:01', '2024-01-01 00:02',
+  '2024-01-01 00:03', '2024-01-01 00:04')),
+ Value = c(1.0, 2.0, 2.0, 3.0, 4.0)
+ )
+ print(sample_data)
+ # Call the function to remove duplicates
+ cleaned_data <- removeTSDuplicates(sample_data, value_column = "Value", maxdupes = 2,
+ prec = 0.0001, output = 0)
+ print(cleaned_data)
+
 }

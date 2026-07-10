@@ -1,16 +1,11 @@
-#' Detect gradual sensor drift in time series water quality data
+#' Detect days above a threshold
 #'
-#' This function detects sustained periods where sensor readings remain consistently
-#' above a calculated threshold, which may indicate sensor drift. The threshold is
-#' defined as a multiple of the median value, and drift is flagged if readings exceed
-#' this threshold continuously for longer than a specified number of days.
-#'
-#' If a column matching "quality" (case-insensitive) exists in the data, drift flags
-#' will be written to it. Otherwise, a new column `quality` is created.
+#' This function calculates the cumulative number of days that a sensor value exceeds a specified threshold.
+#' It can also be configured to only accumulate time when the sensor value is rising or falling, based on the `type` parameter.
 #'
 #' @param data A data frame containing time series data.
 #' @param threshold A numeric to calculate how long is exceeded
-#' @param type A string. "rising" or "falling" (or NULL)
+#' @param type A string. "rising" or "falling" (or NULL) i.e. "rising" will only accumulate times were level is higher than last level
 #'
 #' @return A vector (in days)
 #'
@@ -30,10 +25,12 @@
 #' ts <- seq.POSIXt(from = as.POSIXct("2024-01-01"), by = "hour", length.out = 200)
 #' val <- c(rnorm(150, mean = 2), rep(6, 50))  # final 50 points simulate drift
 #' df <- data.frame(ts = ts, Value = val, Quality = NA_character_)
-#' df <- df %>% mutate(daysAbove = daysAboveThreshold(., 2))
-#' plot(df$ts, df$daysAbove)
+#' daysAbove <- daysAboveThreshold(df, 2)
+#'
+#' plot(df$ts, daysAbove)
+#'
 #' @export
-daysAboveThreshold <- function(data, threshold, type = NULL, dryperiod = 5)
+daysAboveThreshold <- function(data, threshold, type = NULL)
 {
   # data is a dataframe, with 2 columns, a posixct column, and a value column
   # threshold is a number to calculate how long is exceeded

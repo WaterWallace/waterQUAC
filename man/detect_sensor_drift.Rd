@@ -22,7 +22,9 @@ detect_sensor_drift(
 
 \item{time_threshold_days}{Minimum number of **continuous** days above the threshold required to flag sensor drift. Default is 5 days.}
 
-\item{time_col}{A string. The name of the column containing POSIXct timestamps.}
+\item{overwrite}{A vector of quality codes to overwrite}
+
+\item{type}{A string. Either "rising", "falling", or NULL}
 }
 \value{
 A data frame with all original columns, a new column `cumulative_time_above_threshold`
