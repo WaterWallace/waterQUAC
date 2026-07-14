@@ -20,7 +20,7 @@ wmip_hist(
 )
 }
 \arguments{
-\item{site_id}{A gauging station number as defined in the WMIP platform.}
+\item{site_id}{A gauging station number, or vector of gauging station numbers, as defined in the WMIP platform.}
 
 \item{var}{A string referring to the reported variable from the desired site. Refer to \url{https://water-monitoring.information.qld.gov.au/} for information regarding the desired site and what data is available per the desired time period. This parameter defaults to "Level". Options are: level/discharge/rainfall/temperature/conductivity/pH/turbidity}
 
@@ -84,11 +84,13 @@ list <- list()
 for (i in 1:length(wmip_sites)){
   site = wmip_sites[i]
   list[[i]] <- wmip_hist(site_id = site,
-                         start_time = "20230101"
+                         start_time = format(Sys.Date() - 30, "\%Y\%m\%d")
   )
 
 }
 list <- list[lapply(list, typeof) == "list"]
 levels = do.call(rbind, list)
 
+bulk_sites <- wmip_hist(site_id = wmip_sites,
+                         start_time = format(Sys.Date() - 30, "\%Y\%m\%d"))
 }
