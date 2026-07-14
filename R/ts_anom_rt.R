@@ -102,7 +102,7 @@
 #' @export
 ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
                      time_threshold_days = 2,  prec = 0.0001, log = FALSE, invert = FALSE,
-                     last_values = NULL)
+                     z_threshold = c(0.001,4), last_values = NULL)
 {
   #last_values$ts <- as.POSIXct("2026-06-23 17:00:00")
   # Define the pattern to match variations of "quality"
@@ -197,7 +197,7 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
   {
     # loop through each point
     spike_detect <- spike_detect_rt(ts = sp$ts[row], value = sp$value[row], last_t,
-                                    last_running_mean, last_running_var, last_dev)
+                                    last_running_mean, last_running_var, last_dev, z_threshold = z_threshold)
 
     drift_detect <- drift_detect_rt (ts = sp$ts[row], value = sp$value[row], last_t = last_drift_t, last_value = last_value,
                                      threshold_multiplier = 2, time_threshold_days = time_threshold_days, halflife = 120,
