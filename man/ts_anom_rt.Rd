@@ -13,6 +13,7 @@ ts_anom_rt(
   prec = 1e-04,
   log = FALSE,
   invert = FALSE,
+  z_threshold = c(0.001, 4),
   last_values = NULL
 )
 }
