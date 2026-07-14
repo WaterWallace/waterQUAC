@@ -12,9 +12,7 @@ ts_anom(
   window = 10,
   prec = 1e-04,
   diag = FALSE,
-  rep_width = 10,
-  med_width = 11,
-  sd_width = 22
+  rep_width = 10
 )
 }
 \arguments{

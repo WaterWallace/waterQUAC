@@ -63,9 +63,9 @@
 #' @export
 
 ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0001, diag = FALSE,
-                    rep_width = 10,
-                    med_width = 11,
-                    sd_width = 22) {
+                    rep_width = NULL, # 10
+                    med_width = NULL, # 11
+                    sd_width = NULL) { # 22
 
 
   # Define the pattern to match variations of "quality"
@@ -95,15 +95,15 @@ ts_anom <- function(df, overwrite, sensorMin, sensorMax, window = 10, prec = 0.0
 
 
   #Flatline detection
-  sp$centerSD <- zoo::rollapply(df[,2], width = rep_width, FUN = sd, fill = TRUE, align = 'center', na.rm = TRUE)   # a rolling window of Standard Deviation in parameter values - CENTERED -- rep_width determines the window width for all of these options
-  sp$leftSD <-   zoo::rollapply(df[,2], width = rep_width, FUN = sd, fill = TRUE, align = 'left', na.rm = TRUE)     # a rolling window of Standard Deviation in parameter values - LEFT -- rep_width determines the window width for all of these options
-  sp$rightSD <-  zoo::rollapply(df[,2], width = rep_width, FUN = sd, fill = TRUE, align = 'right', na.rm = TRUE)    # a rolling window of Standard Deviation in parameter values - RIGHT -- rep_width determines the window width for all of these options
+  sp$centerSD <- zoo::rollapply(df[,2], width = ifelse(is.null(rep_width),interval,rep_width), FUN = sd, fill = TRUE, align = 'center', na.rm = TRUE)   # a rolling window of Standard Deviation in parameter values - CENTERED -- rep_width determines the window width for all of these options
+  sp$leftSD <-   zoo::rollapply(df[,2], width = ifelse(is.null(rep_width),interval,rep_width), FUN = sd, fill = TRUE, align = 'left', na.rm = TRUE)     # a rolling window of Standard Deviation in parameter values - LEFT -- rep_width determines the window width for all of these options
+  sp$rightSD <-  zoo::rollapply(df[,2], width = ifelse(is.null(rep_width),interval,rep_width), FUN = sd, fill = TRUE, align = 'right', na.rm = TRUE)    # a rolling window of Standard Deviation in parameter values - RIGHT -- rep_width determines the window width for all of these options
 
 
   #Spike detection
   #sp$value <- df$Value
-  sp$median <- zoo::rollapply(suppressWarnings(df[,2]), width = med_width, FUN = median,  partial = TRUE, na.rm = TRUE, align = 'center')   # rolling median of the log(value) for given width - med_width - centered
-  sp$sd <-     zoo::rollapply(suppressWarnings(df[,2]), width = sd_width, FUN = sd, na.rm=TRUE, partial = TRUE, align = 'center')            # rolling standard deviation of the median log(value) as calculated above for a larger window - centered
+  sp$median <- zoo::rollapply(suppressWarnings(df[,2]), width = ifelse(is.null(med_width),interval,med_width), FUN = median,  partial = TRUE, na.rm = TRUE, align = 'center')   # rolling median of the log(value) for given width - med_width - centered
+  sp$sd <-     zoo::rollapply(suppressWarnings(df[,2]), width = ifelse(is.null(sd_width),interval,sd_width), FUN = sd, na.rm=TRUE, partial = TRUE, align = 'center')            # rolling standard deviation of the median log(value) as calculated above for a larger window - centered
 
   #sp$value <- df$Value
   #plot(sp$ts, df$Value)
