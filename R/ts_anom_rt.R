@@ -16,9 +16,11 @@
 #' @param prec Numeric, similarity of a number to be considered a duplicate.
 #' @param log Logical, if TRUE, apply log transformation to the values before processing.
 #' @param invert Logical, if TRUE, invert the values (useful for certain sensor types).
-#' @param last_values A 'data frame' containing the last processed values for real-time processing. It is a recursive output from this ts_anom_rt() function.
+#' @param halflife_mins Half-life in minutes for exponential decay in running mean. The lower the number, the more responsive to real world changes. However shortens "memory".
+#' @param z_threshold Numeric vector of length 2; lower and upper thresholds for z-score to classify spikes. Values outside this range are considered spikes. A lower upper z_score will narrow the bands around the data, detecting more spikes - but may incorrectly flag real-world changes.
+#' @param sd_floor Numeric a higher number reduces the number "noise" spikes.
+#' @param last_values A `data frame` containing the last processed values for real-time processing. It is a recursive output from this ts_anom_rt() function.
 #'
-
 #' @return A named list containing:
 #' \describe{
 #'   \item{last_values}{A single-row data frame summarising the most recent
@@ -102,7 +104,7 @@
 #' @export
 ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
                      time_threshold_days = 2,  prec = 0.0001, log = FALSE, invert = FALSE,
-                     last_values = NULL)
+                     z_threshold = c(0.001,3), halflife_mins = 120, sd_floor = 0.01, last_values = NULL)
 {
   #last_values$ts <- as.POSIXct("2026-06-23 17:00:00")
   # Define the pattern to match variations of "quality"
@@ -197,7 +199,10 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
   {
     # loop through each point
     spike_detect <- spike_detect_rt(ts = sp$ts[row], value = sp$value[row], last_t,
-                                    last_running_mean, last_running_var, last_dev)
+                                    last_running_mean, last_running_var, last_dev,
+                                    halflife_mins = halflife_mins,
+                                    z_threshold = z_threshold,
+                                    sd_floor = sd_floor)
 
     drift_detect <- drift_detect_rt (ts = sp$ts[row], value = sp$value[row], last_t = last_drift_t, last_value = last_value,
                                      threshold_multiplier = 2, time_threshold_days = time_threshold_days, halflife = 120,

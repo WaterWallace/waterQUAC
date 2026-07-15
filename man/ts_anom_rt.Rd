@@ -13,6 +13,9 @@ ts_anom_rt(
   prec = 1e-04,
   log = FALSE,
   invert = FALSE,
+  z_threshold = c(0.001, 3),
+  halflife_mins = 120,
+  sd_floor = 0.01,
   last_values = NULL
 )
 }
@@ -33,7 +36,13 @@ ts_anom_rt(
 
 \item{invert}{Logical, if TRUE, invert the values (useful for certain sensor types).}
 
-\item{last_values}{A 'data frame' containing the last processed values for real-time processing. It is a recursive output from this ts_anom_rt() function.}
+\item{z_threshold}{Numeric vector of length 2; lower and upper thresholds for z-score to classify spikes. Values outside this range are considered spikes. A lower upper z_score will narrow the bands around the data, detecting more spikes - but may incorrectly flag real-world changes.}
+
+\item{halflife_mins}{Half-life in minutes for exponential decay in running mean. The lower the number, the more responsive to real world changes. However shortens "memory".}
+
+\item{sd_floor}{Numeric a higher number reduces the number "noise" spikes.}
+
+\item{last_values}{A `data frame` containing the last processed values for real-time processing. It is a recursive output from this ts_anom_rt() function.}
 }
 \value{
 A named list containing:
