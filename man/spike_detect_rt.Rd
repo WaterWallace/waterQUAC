@@ -12,7 +12,8 @@ spike_detect_rt(
   last_running_var = NULL,
   last_dev = NULL,
   halflife_mins = 120,
-  z_threshold = c(0.001, 4)
+  z_threshold = c(0.001, 3),
+  sd_floor = 0.01
 )
 }
 \arguments{
@@ -28,9 +29,11 @@ spike_detect_rt(
 
 \item{last_dev}{Last deviation value (for real-time processing)}
 
-\item{halflife_mins}{Half-life in minutes for exponential decay in running mean}
+\item{halflife_mins}{Half-life in minutes for exponential decay in running mean. The lower the number, the more responsive to real world changes. However shortens "memory".}
 
-\item{z_threshold}{Numeric vector of length 2; lower and upper thresholds for z-score to classify spikes. Values outside this range are considered spikes.
+\item{z_threshold}{Numeric vector of length 2; lower and upper thresholds for z-score to classify spikes. Values outside this range are considered spikes. A lower upper z_score will narrow the bands around the data, detecting more spikes - but may incorrectly flag real-world changes.}
+
+\item{sd_floor}{Numeric a higher number reduces the number "noise" spikes.
 
 # make the return describe each part and what it means,}
 }

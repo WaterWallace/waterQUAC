@@ -14,8 +14,9 @@
 #' @param last_running_mean Last running mean value (for real-time processing)
 #' @param last_running_var Last running variance value (for real-time processing)
 #' @param last_dev Last deviation value (for real-time processing)
-#' @param halflife_mins Half-life in minutes for exponential decay in running mean
-#' @param z_threshold Numeric vector of length 2; lower and upper thresholds for z-score to classify spikes. Values outside this range are considered spikes.
+#' @param halflife_mins Half-life in minutes for exponential decay in running mean. The lower the number, the more responsive to real world changes. However shortens "memory".
+#' @param z_threshold Numeric vector of length 2; lower and upper thresholds for z-score to classify spikes. Values outside this range are considered spikes. A lower upper z_score will narrow the bands around the data, detecting more spikes - but may incorrectly flag real-world changes.
+#' @param sd_floor Numeric a higher number reduces the number "noise" spikes.
 #'
 #' # make the return describe each part and what it means,
 #' @return  A `data.frame` with output fields serving as the updated state of the running statistics after processing the current observation:
@@ -113,7 +114,8 @@ spike_detect_rt <- function(ts,
                             last_running_var = NULL,
                             last_dev = NULL,
                             halflife_mins = 120,
-                            z_threshold = c(0.001,4))
+                            z_threshold = c(0.001,3),
+                            sd_floor = 0.01)
 {
   # to run this real time spike detection, the only values it needs for memory are these 4 values
 
@@ -144,7 +146,8 @@ spike_detect_rt <- function(ts,
   # so it's the deviance from the mean, divided by the standard deviation (sqrt of variance)
 
   # e.g. for z_score: if deviance / stddev = 4 that's like deviance = 4 * stddev, just neater
-  z_score <- this_dev / max(sqrt(this_var), 0.01)
+  #sd_floor <- 0.01
+  z_score <- this_dev / max(sqrt(this_var), sd_floor)
   # update z_score each time
 
   # if z score is outside the thresholds
