@@ -193,6 +193,7 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
   #despike_batch <- list()
   despiked <- list()
   dedrift <- list()
+  #driftts <- list()
   #drift_detect <- NULL
   #sp <- na.omit(df)
   for(row in 1:nrow(sp))
@@ -204,12 +205,16 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
                                     z_threshold = z_threshold,
                                     sd_floor = sd_floor)
 
+    threshold_multiplier <- 2
+    logCorrectedMultiplier <- log(threshold_multiplier * exp(sp$value[row]) ) / sp$value[row]
+
     drift_detect <- drift_detect_rt (ts = sp$ts[row], value = sp$value[row], last_t = last_drift_t, last_value = last_value,
-                                     threshold_multiplier = 2, time_threshold_days = time_threshold_days, halflife = 120,
+                                     threshold_multiplier = ifelse(log,logCorrectedMultiplier,threshold_multiplier), # log transform the multiplier
+                                     time_threshold_days = time_threshold_days, halflife = 120,
                                      type = "rising",
                                      last_mean = last_drift_mean, cumulative_time = cumulative_time
                                      )
-
+    #driftts[[length(driftts) + 1]] <- drift_detect
 
     if(!spike_detect$spike){ # only update if drift if not a spike
       # update recursive inputs
@@ -236,6 +241,7 @@ ts_anom_rt <- function(df, overwrite = c(1:4000), sensorMin, sensorMax,
   # timestamps of flagged data
   spikesremoved <-  rbindlist(despiked)
   drift_removed <- rbindlist(dedrift)
+  #driftts <- rbindlist(driftts)
 
   # NA if it's in overwrite
   df <- df %>%
