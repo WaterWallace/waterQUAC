@@ -83,7 +83,7 @@ drift_detect_rt <- function(ts, value, last_t, last_value,
 
   # exponentional decay
   dt <- difftime(ts, last_t, units = "days") %>% as.numeric # change in time
-  dynamic_alpha <- 1 - exp(-dt / 120) # exponentional decay factor, with a 30 day halflife
+  dynamic_alpha <- 1 - exp(-dt / 120) # exponentional decay factor, with a 120 day halflife
 
   #
   last_mean <- ( (1 - dynamic_alpha ) * last_mean + dynamic_alpha * value )
